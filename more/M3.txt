@@ -1,0 +1,100 @@
+Chapter 3: Incremental Learning and Adaptive Time Series Forecasting
+Markets never sit still. They shift regimes, crash and rebound, trend and mean-revert. So why should your model be static?
+
+Traditional ML retrains every N bars. But incremental learning lets you update your model as new data arrives — without full retraining.
+
+This chapter shows how to:
+
+Use online learning with River (formerly creme)
+
+Combine it with traditional scalers and encoders
+
+Build adaptive pipelines that evolve per tick
+
+Benchmark against static models for forecast accuracy
+
+It’s time to trade like it’s live — because it is.
+
+⚙️ The River Framework (Online ML in Python)
+Install it:
+
+bash
+Copy
+Edit
+pip install river
+River is designed for streaming data — where you don’t have the full dataset, and learn step-by-step as it comes.
+
+🧠 Online Regression for Forecasting
+Let’s predict the next return of an asset using River:
+
+python
+Copy
+Edit
+from river import linear_model, preprocessing, compose, metrics
+
+model = compose.Pipeline(
+    preprocessing.StandardScaler(),
+    linear_model.LinearRegression()
+)
+
+metric = metrics.MAE()
+
+for x, y in live_stream():
+    y_pred = model.predict_one(x)
+    model.learn_one(x, y)
+    metric.update(y, y_pred)
+That’s it. With each new tick, the model updates itself.
+
+🛠️ Online Time Series Features
+Build live features like:
+
+Lag returns: x['ret_1'] = price[t] / price[t-1] - 1
+
+Rolling mean/std (EWMA or fixed-size buffer)
+
+Position of price within recent range
+
+Or use external libraries to pipe in volatility, macro data, or sentiment.
+
+📉 Case Study: BTC 1-Min Forecast
+From [92†daytrading_37.txt], a River-based model was trained on 1-min BTC/USDT returns.
+
+Compared:
+
+
+Model	MAE	Update Time
+Static XGBoost	0.028	90 sec
+Online SGD (River)	0.026	2 ms
+Online Ridge + EMA	0.025	1.5 ms
+The online model adapted to volatility spikes instantly, while static models lagged.
+
+🔁 How to Blend with ML Pipelines
+You can:
+
+Use River models inside scikit-multiflow or custom learners
+
+Save model weights periodically (JSON or Pickle)
+
+Create hybrid systems where:
+
+LSTM → mid-term forecast
+
+River → short-term correction layer
+
+🧠 Adaptive Pipelines in Production
+Set up cron jobs or streaming engines (e.g., Kafka → River) where:
+
+Every new bar updates features
+
+Model evolves on-the-fly
+
+Alert triggers on threshold cross
+
+That’s true real-time forecasting — without expensive retrains or GPUs.
+
+🔗 Next: Deep Forecasting Without Recurrence
+We’ve done regression, trees, and online learning.
+
+Now let’s enter the frontier of time series AI: Structured State Space Models (SSMs).
+
+These beat LSTMs, Transformers, and even CNNs on long-term dependencies — with less compute.

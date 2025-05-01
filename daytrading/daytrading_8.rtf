@@ -1,0 +1,534 @@
+{\rtf1\ansi\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}}
+{\*\generator Riched20 10.0.19041}\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\f0\fs22\lang9 Trading with confidence\par
+I compared 6 methods to identify the trend of the stock market. These are the results! (Python included)\par
+Unlock the secrets to mastering stock market trends with six powerful methods \f1\emdash  backed by Python code and real results!\par
+Filippos Tzimopoulos\par
+Python in Plain English\par
+Filippos Tzimopoulos\par
+\par
+\f0\'b7\par
+Follow\par
+\par
+Published in\par
+Python in Plain English\par
+\par
+\'b7\par
+12 min read\par
+\'b7\par
+Sep 6, 2024\par
+87\par
+\par
+\par
+2\par
+\par
+\par
+\par
+\par
+\par
+\par
+OpenAI produced Image\par
+Identifying trends is crucial in trading, as it helps traders align with market momentum, maximizing profits and minimizing risks. By recognizing the market\rquote s direction, traders can make informed decisions on entry and exit points, improving overall strategy and avoiding costly mistakes in volatile conditions.\par
+\par
+In this article, you can expect the following:\par
+\par
+Describe the most usual technical analysis methods using indicators to identify the trend\par
+For each method find the total return, using the trend as a signal. (I will use the market practice parameters for each indicator)\par
+Compare various statistics across the methods\par
+Use the above knowledge for an amount of stocks and present the results\par
+Answer the question. Is there a clear winner?\par
+Please note that I will not discuss any comparison with Buy and Hold. The reason is that the scope of my analysis is to understand and compare the methods, and not to develop a winning strategy.\par
+\par
+Before we dive into each method, here are some things to do if you want to follow the article together with Python. If not, you can skip the code and still find the analysis interesting!\par
+\par
+We are going to import the libraries needed throughout the code and download our main dataframe with the prices of SPY. I used SPY since for me the most important trend identification before you analyze the individual stocks, is to understand the market.\par
+\par
+# Import necessary libraries\par
+import yfinance as yf\par
+import pandas as pd\par
+import pandas_ta as ta\par
+import matplotlib.pyplot as plt\par
+import numpy as np\par
+\par
+# Download the stock data\par
+ticker = 'SPY' \par
+df = yf.download(ticker, start='2023-01-01', end='2024-06-01')\par
+Then we will create a function that will be used to get the trend and some statistics throughout the rest of the code\par
+\par
+def calculate_returns(df_for_returns, col_for_returns = 'Close', col_for_signal = 'Trend'):\par
+\par
+    stats = \{\}\par
+\par
+    # Calculate daily returns\par
+    df_for_returns['Daily_Returns'] = df[col_for_returns].pct_change()\par
+    df_for_returns['Returns'] = df_for_returns['Daily_Returns'] * df_for_returns[col_for_signal].shift(1)\par
+    df_for_returns['Returns'] = df_for_returns['Returns'].fillna(0)\par
+    df_for_returns['Equity Curve'] = 100 * (1 + df_for_returns['Returns']).cumprod()\par
+\par
+    equity_curve = df_for_returns['Equity Curve']\par
+    # Calculate the running maximum of the equity curve\par
+    cumulative_max = equity_curve.cummax()\par
+    drawdown = (equity_curve - cumulative_max) / cumulative_max\par
+    stats['max_drawdown'] = drawdown.min()\par
+\par
+    # calculate the sharpe ratio\par
+    stats['sharpe_ratio'] = (df_for_returns['Returns'].mean() / df_for_returns['Returns'].std()) * np.sqrt(252)\par
+\par
+    # calculate the total return\par
+    stats['total_return'] = (equity_curve.iloc[-1] / equity_curve.iloc[0]) - 1\par
+\par
+    # calculate the number of long signals\par
+    stats['number_of_long_signals'] = len(df_for_returns[df_for_returns[col_for_signal] == 1])\par
+\par
+    # calculate the number of short signals\par
+    stats['number_of_short_signals'] = len(df_for_returns[df_for_returns[col_for_signal] == -1])\par
+\par
+    return df_for_returns['Equity Curve'], stats\par
+Now we are ready! Let\rquote s get into the methods.\par
+\par
+Fast and Slow Moving Averages\par
+This method is the most basic approach to trends and is the simplest of all. You have 2 moving averages. When the fast one is higher than the slow one, it indicates an upward trend.\par
+\par
+def calculate_trend_2_ma(df_ohlc, period_slow=21, period_fast=9):\par
+    # Calculate Moving Averages (fast and slow) using pandas_ta\par
+    df_ohlc['MA_Fast'] = df_ohlc.ta.sma(close='Close', length=period_fast)\par
+    df_ohlc['MA_Slow'] = df_ohlc.ta.sma(close='Close', length=period_slow)\par
+\par
+    # Determine the trend based on Moving Averages\par
+    def identify_trend(row):\par
+        if row['MA_Fast'] > row['MA_Slow']:\par
+            return 1\par
+        elif row['MA_Fast'] < row['MA_Slow']:\par
+            return -1\par
+        else:\par
+            return 0\par
+        \par
+    df_ohlc = df_ohlc.assign(Trend=df_ohlc.apply(identify_trend, axis=1))\par
+    df_ohlc['Trend'] =  df_ohlc['Trend'].fillna('0')\par
+\par
+    return df_ohlc['Trend']\par
+\par
+df['Trend'] = calculate_trend_2_ma(df, period_slow=21, period_fast=9)\par
+df['Equity Curve'], stats = calculate_returns(df, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+\par
+# Plotting with adjusted subplot heights\par
+fig, ax1 = plt.subplots(1, 1, figsize=(14, 7), sharex=True)\par
+\par
+# Plotting the close price with the color corresponding to the trend\par
+for i in range(1, len(df)):\par
+    ax1.plot(df.index[i-1:i+1], df['Close'].iloc[i-1:i+1], \par
+             color='green' if df['Trend'].iloc[i] == 1 else \par
+                   ('red' if df['Trend'].iloc[i] == -1 else 'darkgrey'), linewidth=2)\par
+\par
+# Plot the Moving Averages\par
+ax1.plot(df['MA_Fast'], label='9-day MA (Fast)', color='blue')\par
+ax1.plot(df['MA_Slow'], label='21-day MA (Slow)', color='orange')\par
+ax1.set_title(f'\{ticker\} - Price and Moving Averages')\par
+ax1.text(0.5, 0.9, f'Total Return: \{stats['total_return']:.2%\}', transform=ax1.transAxes, ha='center', va='top', fontsize=14)\par
+ax1.legend(loc='best')\par
+\par
+plt.show()\par
+Running the code you will get the below plot. Take a look at the way that I have plotted the close price. When the signal is uptrend, the color of the line is green. When the signal is downtrend the color is red. And it will be gray when there is no signal.\par
+\par
+\par
+The total return is 14.03%. Spoiler alert! This method for SPY is the best by far. But keep up reading. It will go sideways!\par
+\par
+Moving Average + MACD\par
+Both indicators should be aligned. This means that to identify an uptrend, the Close price should be above the moving average, and the MACD line should be above the MACD signal.\par
+\par
+def calculate_trend_macd_ma(df_ohlc, ma_period=50, macd_fast=12, macd_slow=26, macd_signal=9):\par
+    # Calculate MACD using pandas_ta\par
+    df_ohlc.ta.macd(close='Close', fast=macd_fast, slow=macd_slow, signal=macd_signal, append=True)\par
+\par
+    # Calculate Moving Average\par
+    df_ohlc['MA'] = df_ohlc.ta.sma(close='Close', length=ma_period)\par
+\par
+    # Determine the trend based on MA and MACD\par
+    def identify_trend(row):\par
+        macd_name = f'\{macd_fast\}_\{macd_slow\}_\{macd_signal\}'\par
+        if row['Close'] > row['MA'] and row[f'MACD_\{macd_name\}'] > row[f'MACDs_\{macd_name\}']:\par
+            return 1\par
+        elif row['Close'] < row['MA'] and row[f'MACD_\{macd_name\}'] < row[f'MACDs_\{macd_name\}']:\par
+            return -1\par
+        else:\par
+            return 0\par
+\par
+    df_ohlc['Trend'] = df_ohlc.apply(identify_trend, axis=1)\par
+    return df_ohlc['Trend']\par
+\par
+df['Trend'] = calculate_trend_macd_ma(df, ma_period=50, macd_fast=12, macd_slow=26, macd_signal=9)\par
+df['Equity Curve'], stats = calculate_returns(df, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+\par
+# Plotting with adjusted subplot heights\par
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True, \par
+                               gridspec_kw=\{'height_ratios': [3, 1]\})\par
+\par
+# Plotting the close price with the color corresponding to the trend\par
+for i in range(1, len(df)):\par
+    ax1.plot(df.index[i-1:i+1], df['Close'].iloc[i-1:i+1], \par
+             color='green' if df['Trend'].iloc[i] == 1 else \par
+                   ('red' if df['Trend'].iloc[i] == -1 else 'darkgrey'), linewidth=2)\par
+\par
+# Plot the Moving Average\par
+ax1.plot(df['MA'], label=f'50-day MA', color='orange')\par
+ax1.set_title(f'\{ticker\} - Price and Moving Average')\par
+ax1.text(0.5, 0.9, f'Total Return: \{stats['total_return']:.2%\}', transform=ax1.transAxes, ha='center', va='top', fontsize=14)\par
+ax1.legend(loc='best')\par
+\par
+# Plot MACD and Signal Line on the second subplot (smaller height)\par
+ax2.plot(df.index, df['MACD_12_26_9'], label='MACD', color='blue')\par
+ax2.plot(df.index, df['MACDs_12_26_9'], label='Signal Line', color='red')\par
+ax2.set_title(f'\{ticker\} - MACD')\par
+ax2.legend(loc='best')\par
+\par
+plt.show()\par
+\par
+The total return is 4.48%, quite lower than the 2-MA, but as you see there are a lot of gray (neutral) periods, so at least we were not exposed all the time.\par
+\par
+RSI + Fast and Slow Moving Averages\par
+Similar to the above, we will use the fast and slow Moving Average, but together with the RSI. The hypothesis is that again both signals should align. The fast MA should be above the slow one, and RSI > 50 to identify an uptrend and opposite for downtrend.\par
+\par
+def calculate_trend_rsi_ma(df_ohlc, rsi_period=14, ma_fast=9, ma_slow=21):\par
+\par
+    # Calculate RSI using pandas_ta\par
+    df_ohlc['RSI'] = df.ta.rsi(close='Close', length=rsi_period)\par
+\par
+    # Calculate Moving Averages (14-day and 50-day) using pandas_ta\par
+    df_ohlc[f'MA_\{ma_fast\}'] = df_ohlc.ta.sma(close='Close', length=14)\par
+    df_ohlc[f'MA_\{ma_slow\}'] = df_ohlc.ta.sma(close='Close', length=50)\par
+\par
+    # Determine the trend based on RSI and Moving Averages\par
+    def identify_trend(row):\par
+        if row['RSI'] > 50 and row[f'MA_\{ma_fast\}'] > row[f'MA_\{ma_slow\}']:\par
+            return 1\par
+        elif row['RSI'] < 50 and row[f'MA_\{ma_fast\}'] < row[f'MA_\{ma_slow\}']:\par
+            return -1\par
+        else:\par
+            return 0\par
+\par
+    df_ohlc['Trend'] = df_ohlc.apply(identify_trend, axis=1)\par
+    return df_ohlc['Trend']\par
+\par
+df['Trend'] = calculate_trend_rsi_ma(df, rsi_period=14, ma_fast=14, ma_slow=50)\par
+df['Equity Curve'], stats = calculate_returns(df, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+\par
+# Plotting with adjusted subplot heights\par
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True, \par
+                               gridspec_kw=\{'height_ratios': [3, 1]\})\par
+\par
+# Plotting the close price with the color corresponding to the trend\par
+for i in range(1, len(df)):\par
+    ax1.plot(df.index[i-1:i+1], df['Close'].iloc[i-1:i+1], \par
+             color='green' if df['Trend'].iloc[i] == 1 else \par
+                   ('red' if df['Trend'].iloc[i] == -1 else 'darkgrey'), linewidth=2)\par
+\par
+# Plot the Moving Averages\par
+ax1.plot(df['MA_14'], label='14-day MA', color='blue')\par
+ax1.plot(df['MA_50'], label='50-day MA', color='orange')\par
+ax1.text(0.5, 0.9, f'Total Return: \{stats['total_return']:.2%\}', transform=ax1.transAxes, ha='center', va='top', fontsize=14)\par
+ax1.set_title(f'\{ticker\} - Price, RSI and Fast and Slow Moving Average')\par
+ax1.legend(loc='best')\par
+\par
+# Plot RSI on the second subplot (smaller height)\par
+ax2.plot(df.index, df['RSI'], label='RSI', color='purple')\par
+ax2.axhline(50, color='black', linestyle='--', linewidth=1)  # Add a horizontal line at RSI=50\par
+ax2.set_title(f'\{ticker\} - RSI')\par
+ax2.legend(loc='best')\par
+\par
+plt.show()\par
+\par
+The result is significantly lower to 1.82%. It seems that the fast and slow MAs don\rquote t benefit much from the addition of RSI\'85\par
+\par
+Bollinger Bands and RSI\par
+Let\rquote s try now to combine Bollinger Bands with RSI. Again, both signals need to align. We have an uptrend when the price is above the middle Bollinger Band and the RSI is above 50.\par
+\par
+def calculate_trend_bbands_rsi(df_ohlc, bbands_period=5, bbands_std=2, rsi_period=14):\par
+\par
+    # Calculate RSI using pandas_ta\par
+    df_ohlc['RSI'] = df_ohlc.ta.rsi(close='Close', length=rsi_period)\par
+\par
+    # Calculate Bollinger Bands using pandas_ta\par
+    bbands = df.ta.bbands(close='Close', length=bbands_period, std=bbands_std)\par
+    df_ohlc['BB_upper'] = bbands[f'BBU_\{bbands_period\}_\{bbands_std\}.0']\par
+    df_ohlc['BB_middle'] = bbands[f'BBM_\{bbands_period\}_\{bbands_std\}.0']\par
+    df_ohlc['BB_lower'] = bbands[f'BBL_\{bbands_period\}_\{bbands_std\}.0']\par
+\par
+    # Determine the trend based on Bollinger Bands and RSI\par
+    def identify_trend(row):\par
+        if row['Close'] > row['BB_middle'] and row['RSI'] > 50:\par
+            return 1\par
+        elif row['Close'] < row['BB_middle'] and row['RSI'] < 50:\par
+            return -1\par
+        else:\par
+            return 0\par
+\par
+    df_ohlc['Trend'] = df_ohlc.apply(identify_trend, axis=1)\par
+    return df_ohlc['Trend']\par
+\par
+df['Trend'] = calculate_trend_bbands_rsi(df, bbands_period=20, bbands_std=2, rsi_period=14)\par
+df['Equity Curve'], stats = calculate_returns(df, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+\par
+# Plotting with adjusted subplot heights\par
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True, \par
+                               gridspec_kw=\{'height_ratios': [3, 1]\})\par
+\par
+# Plotting the close price with the color corresponding to the trend\par
+for i in range(1, len(df)):\par
+    ax1.plot(df.index[i-1:i+1], df['Close'].iloc[i-1:i+1], \par
+             color='green' if df['Trend'].iloc[i] == 1 else \par
+                   ('red' if df['Trend'].iloc[i] == -1 else 'darkgrey'), linewidth=2)\par
+\par
+# Plot Bollinger Bands\par
+ax1.plot(df['BB_upper'], label='Upper Band', color='blue', linestyle='--')\par
+ax1.plot(df['BB_middle'], label='Middle Band', color='orange')\par
+ax1.plot(df['BB_lower'], label='Lower Band', color='blue', linestyle='--')\par
+ax1.text(0.5, 0.9, f'Total Return: \{stats['total_return']:.2%\}', transform=ax1.transAxes, ha='center', va='top', fontsize=14)\par
+ax1.set_title(f'\{ticker\} - Price, RSI and Bollinger Bands')\par
+ax1.legend(loc='best')\par
+\par
+# Plot RSI on the second subplot (smaller height)\par
+ax2.plot(df.index, df['RSI'], label='RSI', color='purple')\par
+ax2.axhline(50, color='black', linestyle='--', linewidth=1)  # Add a horizontal line at RSI=50\par
+ax2.set_title(f'\{ticker\} - RSI')\par
+ax2.legend(loc='best')\par
+\par
+plt.show()\par
+\par
+This combination ends up with 4.56% total return. Again the RSI looks like it spoils the party\'85\par
+\par
+ADX with slow and fast Moving Average\par
+By combining ADX and Moving Averages we will identify an uptrend when the ADX is above 25 (indicating a strong trend) and the fast MA is above the slow MA.\par
+\par
+def calculate_trend_adx_ma(df_ohlc, adx_period=14, fast_ma_period=14, slow_ma_period=50):\par
+    # Calculate ADX using pandas_ta\par
+    df_ohlc['ADX'] = df_ohlc.ta.adx(length=adx_period)[f'ADX_\{adx_period\}']\par
+\par
+    # Calculate Moving Averages (14-day and 50-day) using pandas_ta\par
+    df_ohlc['MA_fast'] = df_ohlc.ta.sma(close='Close', length=fast_ma_period)\par
+    df_ohlc['MA_slow'] = df_ohlc.ta.sma(close='Close', length=slow_ma_period)\par
+\par
+    # Determine the trend based on ADX and Moving Averages\par
+    def identify_trend(row):\par
+        if row['ADX'] > 25 and row['MA_fast'] > row['MA_slow']:\par
+            return 1\par
+        elif row['ADX'] > 25 and row['MA_fast'] < row['MA_slow']:\par
+            return -1\par
+        else:\par
+            return 0\par
+\par
+    df_ohlc['Trend'] = df_ohlc.apply(identify_trend, axis=1)\par
+    return df_ohlc['Trend']\par
+\par
+df['Trend'] = calculate_trend_adx_ma(df, adx_period=14, fast_ma_period=14, slow_ma_period=50)\par
+df['Equity Curve'], stats = calculate_returns(df, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+\par
+# Plotting with adjusted subplot heights\par
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True, \par
+                               gridspec_kw=\{'height_ratios': [3, 1]\})\par
+\par
+# Plotting the close price with the color corresponding to the trend\par
+for i in range(1, len(df)):\par
+    ax1.plot(df.index[i-1:i+1], df['Close'].iloc[i-1:i+1], \par
+             color='green' if df['Trend'].iloc[i] == 1 else \par
+                   ('red' if df['Trend'].iloc[i] == -1 else 'darkgrey'), linewidth=2)\par
+\par
+# Plot the Moving Averages\par
+ax1.plot(df['MA_fast'], label='Fast MA', color='blue')\par
+ax1.plot(df['MA_slow'], label='Slow MA', color='orange')\par
+ax1.text(0.5, 0.9, f'Total Return: \{stats['total_return']:.2%\}', transform=ax1.transAxes, ha='center', va='top', fontsize=14)\par
+ax1.set_title(f'\{ticker\} - Price, ADX and Moving Averages')\par
+ax1.legend(loc='best')\par
+\par
+# Plot ADX on the second subplot (smaller height)\par
+ax2.plot(df.index, df['ADX'], label='ADX', color='purple')\par
+ax2.axhline(25, color='black', linestyle='--', linewidth=1)  # Add a horizontal line at ADX=25\par
+ax2.set_title(f'\{ticker\} - ADX')\par
+ax2.legend(loc='best')\par
+\par
+plt.show()\par
+\par
+That looks interesting! So little time in the market and such a decent return of 11.03%. We should keep that in mind.\par
+\par
+Ichimoku Cloud and MACD\par
+Let\rquote s do some fancy stuff with some unknown Japanese words! We will use the Ichimoku Cloud together with the MACD. We identify an uptrend when the price is above the Ichimoku Cloud and the MACD is above the Signal Line.\par
+\par
+def calculate_trend_ichimoku_macd(df_ohlc, macd_fast=12, macd_slow=26, macd_signal=9, tenkan=9, kijun=26, senkou=52):\par
+\par
+    # Calculate Ichimoku Cloud components using pandas_ta\par
+    df_ichimoku = df_ohlc.ta.ichimoku(tenkan, kijun, senkou)[0]\par
+\par
+    # Extract Ichimoku Cloud components\par
+    df_ohlc['Ichimoku_Conversion'] = df_ichimoku[f'ITS_\{tenkan\}']  # Tenkan-sen (Conversion Line)\par
+    df_ohlc['Ichimoku_Base'] = df_ichimoku[f'IKS_\{kijun\}']       # Kijun-sen (Base Line)\par
+    df_ohlc['Ichimoku_Span_A'] = df_ichimoku[f'ITS_\{tenkan\}']         # Senkou Span A\par
+    df_ohlc['Ichimoku_Span_B'] = df_ichimoku[f'ISB_\{kijun\}']        # Senkou Span B\par
+\par
+    # Calculate MACD using pandas_ta\par
+    df_ohlc.ta.macd(close='Close', fast=macd_fast, slow=macd_slow, signal=macd_signal, append=True)\par
+\par
+    # Determine the trend based on Ichimoku Cloud and MACD\par
+    def identify_trend(row):\par
+        if row['Close'] > max(row['Ichimoku_Span_A'], row['Ichimoku_Span_B']) and row['MACD_12_26_9'] > row['MACDs_12_26_9']:\par
+            return 1\par
+        elif row['Close'] < min(row['Ichimoku_Span_A'], row['Ichimoku_Span_B']) and row['MACD_12_26_9'] < row['MACDs_12_26_9']:\par
+            return -1\par
+        else:\par
+            return 0\par
+\par
+    df_ohlc['Trend'] = df_ohlc.apply(identify_trend, axis=1)\par
+    return df_ohlc['Trend']\par
+\par
+df['Trend'] = calculate_trend_ichimoku_macd(df, macd_fast=12, macd_slow=26, macd_signal=9)\par
+df['Equity Curve'], stats = calculate_returns(df, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+\par
+# Plotting with adjusted subplot heights\par
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True, \par
+                               gridspec_kw=\{'height_ratios': [3, 1]\})\par
+\par
+# Plotting the close price with the color corresponding to the trend\par
+for i in range(1, len(df)):\par
+    ax1.plot(df.index[i-1:i+1], df['Close'].iloc[i-1:i+1], \par
+             color='green' if df['Trend'].iloc[i] == 1 else \par
+                   ('red' if df['Trend'].iloc[i] == -1 else 'darkgrey'), linewidth=2)\par
+\par
+# Plot Ichimoku Cloud\par
+ax1.fill_between(df.index, df['Ichimoku_Span_A'], df['Ichimoku_Span_B'], \par
+                 where=(df['Ichimoku_Span_A'] >= df['Ichimoku_Span_B']), color='lightgreen', alpha=0.5)\par
+ax1.fill_between(df.index, df['Ichimoku_Span_A'], df['Ichimoku_Span_B'], \par
+                 where=(df['Ichimoku_Span_A'] < df['Ichimoku_Span_B']), color='lightcoral', alpha=0.5)\par
+\par
+ax1.plot(df['Ichimoku_Conversion'], label='Conversion Line (Tenkan-sen)', color='blue')\par
+ax1.plot(df['Ichimoku_Base'], label='Base Line (Kijun-sen)', color='orange')\par
+ax1.text(0.5, 0.9, f'Total Return: \{stats['total_return']:.2%\}', transform=ax1.transAxes, ha='center', va='top', fontsize=14)\par
+ax1.set_title(f'\{ticker\} - Price and Ichimoku Cloud')\par
+ax1.legend(loc='best')\par
+\par
+# Plot MACD and Signal Line on the second subplot (smaller height)\par
+ax2.plot(df.index, df['MACD_12_26_9'], label='MACD', color='blue')\par
+ax2.plot(df.index, df['MACDs_12_26_9'], label='Signal Line', color='red')\par
+ax2.set_title(f'\{ticker\} - MACD')\par
+ax2.legend(loc='best')\par
+\par
+plt.show()\par
+\par
+That is a decent return of 7.63% but too many in and outs for my taste.\par
+\par
+Summarise the results for SPY\par
+To summarise the results, we can run the below code:\par
+\par
+# Download the stock data\par
+ticker = 'SPY'  # You can replace 'AAPL' with any other stock ticker or currency pair\par
+df = yf.download(ticker, start='2023-01-01', end='2024-06-01')\par
+\par
+trend_identification_methods = ['2_ma', 'macd_ma', 'rsi_ma', 'bbands_rsi', 'adx_ma',  'ichimoku_macd']\par
+trend_identification_results = []\par
+\par
+def calculate_trend(df, method):\par
+    if method == '2_ma':\par
+        return calculate_trend_2_ma(df, period_slow=21, period_fast=9)\par
+    elif method == 'macd_ma':\par
+        return calculate_trend_macd_ma(df, ma_period=50, macd_fast=12, macd_slow=26, macd_signal=9)\par
+    elif method == 'rsi_ma':\par
+        return calculate_trend_rsi_ma(df, rsi_period=14, ma_fast=9, ma_slow=21)\par
+    elif method == 'bbands_rsi':\par
+        return calculate_trend_bbands_rsi(df, bbands_period=5, bbands_std=2, rsi_period=14)\par
+    elif method == 'adx_ma':\par
+        return calculate_trend_adx_ma(df, adx_period=14, fast_ma_period=14, slow_ma_period=50)\par
+    elif method == 'ichimoku_macd':\par
+        return calculate_trend_ichimoku_macd(df, macd_fast=12, macd_slow=26, macd_signal=9, tenkan=9, kijun=26, senkou=52)\par
+\par
+for method in trend_identification_methods:\par
+\par
+    # Calculate results of returns for each method and append to the list\par
+    df_copy = df.copy()\par
+    d = \{\}\par
+    d['Method'] = method\par
+    df_copy['Trend'] = calculate_trend(df_copy, method)\par
+    df_copy['Equity Curve'], stats = calculate_returns(df_copy, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+    d.update(stats)\par
+    trend_identification_results.append(d)\par
+\par
+    # Add trend line and equity curve to the df\par
+    df[f'Trend_\{method\}'] = df_copy['Trend']\par
+    df[f'Equity Curve_\{method\}'] = df_copy['Equity Curve']\par
+\par
+\par
+trend_identification_results_df = pd.DataFrame(trend_identification_results)\par
+\par
+trend_identification_results_df\par
+\par
+Summarizing the results for SPY, it appears that the fast and slow MAs offer the best return with a decent Sharpe ratio, however, it has also the worst drawdown. This can be explained (for both good returns and bad drawdowns) that this is the strategy with more signals, so it \ldblquote spends\rdblquote  the most time in the market (exposure). Also ADX with fast and slow MAs has the second best, with less exposure time in the market. That is interesting.\par
+\par
+Let\rquote s check some more stocks\par
+Now we will run SPY and add 4 more stocks.\par
+\par
+tickers = ['AAPL', 'AMZN', 'GOOG', 'TSLA', 'SPY']\par
+results = []\par
+\par
+for ticker in tickers:\par
+    df = yf.download(ticker, start='2023-01-01', end='2024-06-01')\par
+\par
+    trend_identification_methods = ['2_ma', 'macd_ma', 'rsi_ma', 'bbands_rsi', 'adx_ma',  'ichimoku_macd']\par
+    trend_identification_results = []\par
+\par
+    def calculate_trend(df, method):\par
+        if method == '2_ma':\par
+            return calculate_trend_2_ma(df, period_slow=21, period_fast=9)\par
+        elif method == 'macd_ma':\par
+            return calculate_trend_macd_ma(df, ma_period=50, macd_fast=12, macd_slow=26, macd_signal=9)\par
+        elif method == 'rsi_ma':\par
+            return calculate_trend_rsi_ma(df, rsi_period=14, ma_fast=9, ma_slow=21)\par
+        elif method == 'bbands_rsi':\par
+            return calculate_trend_bbands_rsi(df, bbands_period=5, bbands_std=2, rsi_period=14)\par
+        elif method == 'adx_ma':\par
+            return calculate_trend_adx_ma(df, adx_period=14, fast_ma_period=14, slow_ma_period=50)\par
+        elif method == 'ichimoku_macd':\par
+            return calculate_trend_ichimoku_macd(df, macd_fast=12, macd_slow=26, macd_signal=9, tenkan=9, kijun=26, senkou=52)\par
+\par
+\par
+    for method in trend_identification_methods:\par
+\par
+        # Calculate results of returns for each method and append to the list\par
+        df_copy = df.copy()\par
+        d = \{\}\par
+        d['Method'] = method\par
+        df_copy['Trend'] = calculate_trend(df_copy, method)\par
+        df_copy['Equity Curve'], stats = calculate_returns(df_copy, col_for_returns = 'Close', col_for_signal = 'Trend')\par
+        results.append(\{'ticker':ticker, 'method':method, 'total_return':stats['total_return']\})\par
+\par
+test_df = pd.DataFrame(results)\par
+\par
+# Pivot the DataFrame to prepare for plotting\par
+pivot_df = test_df.pivot(index='ticker', columns='method', values='total_return')\par
+\par
+# Plotting\par
+pivot_df.plot(kind='bar', figsize=(12, 8))\par
+\par
+plt.title('Comparison of total returns per trend method')\par
+plt.ylabel('Value')\par
+plt.xlabel('Stock')\par
+plt.legend(title='Indicators', bbox_to_anchor=(1.05, 1), loc='upper left')\par
+plt.xticks(rotation=45)\par
+\par
+plt.tight_layout()\par
+plt.show()\par
+The plot will compare the total returns per stock and the method of identification of the trend. Let\rquote s see:\par
+\par
+\par
+Now things are getting messier\'85 There is no pattern to award a clear winner. My personal preference though is ADX with fast and slow MA. It tends to either be the best or among the top 3, and even when it isn\rquote t, it never performs poorly. Additionally, as we said before, it has also less exposure than the rest. I like it ;)\par
+\par
+You can find the Python notebook at Git Hub by pressing here.\par
+\par
+Next Steps\par
+What you can work on (I will for sure and possibly post it here!):\par
+\par
+Check FOREX or commodities and how they react to those cases\par
+Use those methods as filters rather than signals, and analyze what we missed out (FOMO!)\par
+Try to identify if there is a common pattern among all stocks, or if its stock has its own preference\par
+I hope you enjoyed the article and it triggered more ideas at your end!\par
+\par
+Come along on my data-driven investing journey! Follow me on Medium, Twitter (currently known as X), and Github. I\rquote m all about simplicity and growth through coding, writing, and trying to understand data ;)\par
+\par
+Disclaimer: While we explore the exciting world of investing in this article, it\rquote s crucial to note that the information provided is for educational purposes only. I\rquote m not a financial advisor, and the content here doesn\rquote t constitute financial advice. Always do your research and consider consulting with a professional before making any investment decisions.\par
+}
+ 

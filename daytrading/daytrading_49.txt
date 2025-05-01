@@ -1,0 +1,259 @@
+19 Most Elegant Sklearn Tricks I Found After 3 Years of Use
+Advanced techniques and hidden gems for effective machine learning
+Bex T.
+Towards AI
+Bex T.
+
+·
+Follow
+
+Published in
+Towards AI
+
+·
+12 min read
+·
+Jun 16, 2023
+1.1K
+
+
+4
+
+
+
+
+
+Learn about 19 Sklearn features you have never seen that are direct and elegant replacements to common operations you do manually.
+
+
+Image by me with Midjourney
+Introduction
+After three years of use and by looking at the API reference of Sklearn, I have realized that the most commonly used models and functions are only a thin slice of what the library can do. Even though some features are extremely narrow-focused and used for rare edge cases, I have found many estimators, transformers, and utility functions that are more elegant fixes to common operations people do manually.
+
+So, I have decided to make a list of the most elegant and important ones and briefly explain them so that you can significantly expand your Sklearn toolset in a single article. Enjoy!
+
+1️⃣. covariance.EllipticEnvelope
+It is common for distributions to have outliers. Many algorithms deal with outliers and EllipticalEnvelope is an example that is directly built-in to Sklearn. The advantage of this algorithm is that it performs exceptionally well at detecting outliers in normally distributed (Gaussian) features:
+
+
+Showcasing how to use the EllipticEnvelope estimator to detect outliers from normally-distributed features.
+To test the estimator, we create a normal distribution with a mean of 5 and a standard deviation of 2. After it is trained, we pass some random numbers to its predict method. The method returns -1 for outliers in the test, which are 20, 10, 13.
+
+2️⃣. feature_selection.RFECV
+Selecting the features that help with predictions the most is a must step to combat overfitting and reduce model complexity. One of the most robust algorithms offered by Sklearn is Recursive Feature Elimination (RFE). It automatically finds the most important features by using cross-validation and discards the rest.
+
+An advantage of this estimator is that it is a wrapper — it can be used around any Sklearn algorithm that returns feature importance or coefficient scores. Here is an example on a synthetic dataset:
+
+
+Showing how a model-based feature selection technique — RFECV works using Ridge regressor as the model.
+The fake dataset has 15 features, 10 of which are informative, and the rest are redundant. We fit 5-fold RFECV with Ridge regression as an estimator. After training, you can use the transform method to discard the redundant features. Calling .shape shows us that the estimator managed to drop all 5 unnecessary features.
+
+I have written an entire article on this algorithm covering the nitty-gritty details of how it works with a real-world dataset:
+
+Powerful Feature Selection with Recursive Feature Elimination (RFE) of Sklearn
+Get the same model performance even after dropping 93 features
+towardsdatascience.com
+
+3️⃣. ensemble.ExtraTrees
+Even though Random Forests are all mighty and powerful, the risk of overfitting is very high. Therefore, Sklearn offers a drop-in alternative to RF called ExtraTrees (both classifier and regressor).
+
+The word ‘extra’ does not mean more trees but more randomness. The algorithm uses another type of tree that closely resembles decision trees.
+
+The only difference is that instead of calculating the split thresholds while building each tree, these thresholds are drawn randomly for each feature, and the best threshold is chosen as a splitting rule. This reduces the variance at the cost of a slight increase in bias:
+
+
+Comparing the performance of RandomForest and ExtaTreesRegressor on a synthetic dataset. ExtraTrees victorious!
+As you can see, ExtraTreesRegressor performed better than Random Forests on a synthetic dataset.
+
+Read more about Extremely Randomized Trees from the official user guide.
+
+4️⃣. impute.IterativeImputer and KNNImputer
+If you are looking for more robust and more advanced imputation techniques than SimpleImputer, Sklearn got you covered once again.
+
+The sklearn.impute subpackage includes two model-based imputation algorithms - KNNImputer and IterativeImputer.
+
+As the name suggests, KNNImputer uses the k-Nearest-Neighbors algorithm to find the best replacement for missing values:
+
+
+Using KNNImputer as a model based imputation technique to appropriately fill missing values.
+A more robust algorithm is IterativeImputer. It finds missing values by modeling each feature with missing values as a function of the rest of the features. This process is done in a step-by-step round-robin fashion. At each step, a single feature with missing values is chosen as a target (y) and the rest are chosen as feature array (X). Then, a regressor is used to predict the missing values in y and this process is continued for each feature until max_iter times (a parameter of IterativeImputer).
+
+As a result, multiple predictions are generated for a single missing value. This has the benefit of treating each missing value as a random variable and associate the inherent uncertainty that comes with them:
+
+
+Showing how a more robust model-based imputation technique — IterativeImputer works.
+BayesianRidge and ExtraTree is found to perform better with IterativeImputer.
+
+You can learn more about these two imputation techniques in my separate article:
+
+In-depth Tutorial to Advanced Missing Data Imputation Methods with Sklearn
+Learn to leverage powerful model-based imputation techniques.
+towardsdatascience.com
+
+5️⃣. linear_model.HuberRegressor
+The presence of outliers can heavily screw up the predictions of any model. Many outlier detection algorithms discard outliers and mark them as missing. While this helps the learning function of the models, it completely removes the effect the outliers have on the distribution.
+
+An alternative algorithm is HuberRegressor. Instead of completely removing them, it gives outliers less weight during the fit time. It has epsilon hyperparameter that controls the number of samples that should be classified as outliers. The smaller the parameter, the more robust the model is to outliers. Its API is the same as any other linear regressor.
+
+Below, you can see its comparison with the Bayesian Ridge regressor on a dataset with heavy outliers:
+
+
+Image by Sklearn user guide. License — BSD-3
+As you can see, HuberRegressor with epsilon 1.35 1.5, 1.75 managed to capture the line of best fit that is not affected by outliers.
+
+You can learn more about the algorithm from the user guide.
+
+6️⃣. tree.plot_tree
+Sklearn allows you to plot the structure of a single decision tree using the plot_tree function. This feature may be handy for beginners who have just started learning about tree-based and ensemble models:
+
+
+Visualizing decision trees with the `plot_tree` function of Sklearn.
+png
+Image by Sklearn user guide. License — BSD-3
+There are other methods of plotting the trees, such as in Graphviz format. Learn about them from the user guide.
+
+7️⃣. linear_model.Perceptron
+The coolest name in this list goes to the #7 — Perceptron. Even though it has a fancy name, it is a simple linear binary classifier. The defining feature of the algorithm is that it is suitable for large-scale learning and by default:
+
+It does not require a learning rate.
+Do not implement regularization.
+It updates its model only on mistakes.
+It is equivalent to SGDClassifier with loss='perceptron', eta=1, learning_rate="constant", penalty=None but slightly faster:
+
+
+Showcasing the performance of Perceptron on a sample binary classification problem.
+8️⃣. feature_selection.SelectFromModel
+Another model-based feature selection estimator in Sklearn is SelectFromModel. It is not as robust as RFECV but can be a good option for massive datasets since it has a lower computation cost. It is also a wrapper estimator and works with any model that has either .feature_importances_ or .coef_ attributes:
+
+
+Trying out SelectFromModel estimator with ExtraTreesRegressor on a synthetic dataset with 40 redundant features.
+As you can see, the algorithm managed to drop all 40 redundant features.
+
+9️⃣. metrics.ConfusionMatrixDisplay
+Confusion matrices are the holy grail of classification problems. Most metrics are derived from it, such as precision, recall, F1, ROC AUC, etc. Sklearn allows you to compute and plot a default confusion matrix:
+
+
+png
+Image by author
+Honestly, I wouldn’t say I like the default confusion matrix. Its format is fixed — the rows are true labels, and the columns are predictions. Also, the first row and column are the negative class and the second row and column are positive. Some people might prefer a matrix that is in a different format, maybe transposed or flipped.
+
+For example, I like to make the positive class as the first row and the first column to align with the format given in Wikipedia. This helps me to better isolate the 4 matrix terms — TP, FP, TN, FN. Luckily, you can plot a custom matrix with another function — ConfusionMatrixDisplay:
+
+
+png
+Image by author
+You can put the confusion matrix cm in any format, you want before passing it to ConfusionMatrixDisplay.
+
+You can learn all about classification and confusion matrices from this article:
+
+Comprehensive Tutorial on Using Confusion Matrix in Classification
+Learn to control model output based on what's important to the problem using a confusion matrix
+towardsdatascience.com
+
+🔟. Generalized Linear Models
+There is no point in transforming the target (y) to make it normally distributed if there are alternatives that can work on other types of distributions.
+
+For example, Sklearn offers three generalized linear models for target variables that are Poisson, Tweedie, or Gamma distributed. Rather than expecting a normal distribution, PoissonRegressor, TweedieRegressor and GammaRegressor can generate robust results for targets with respective distributions.
+
+Apart from that, their APIs are the same as any other Sklearn model. To find out if the distribution of the target matches the above three, you can plot their PDF (Probability Density Function)s on the same axes with the perfect distribution.
+
+For example, to see if the target follows Poisson distribution, plot its PDF using Seaborn’s kdeplot and plot the perfect Poisson distribution by sampling it from Numpy using np.random.poisson on the same axes.
+
+1️⃣1️⃣. ensemble.IsolationForest
+As tree-based and ensemble models generally produce more robust results, they have been proven effective in outlier detection as well. IsolationForest in Sklearn uses a forest of extremely random trees (tree.ExtraTreeRegressor) to detect outliers. Each tree tries to isolate each sample by selecting a single feature and randomly choosing a split value between the maximum and minimum values of the selected feature.
+
+This type of random partitioning produces noticeably shorter paths between the root node and the terminating node of each tree.
+
+So, when a forest of random trees collectively produce shorter path lengths for particular samples, they are highly likely to be anomalies — Sklearn user guide.
+
+
+The algorithm correctly captured the outlier (90) and marked it as -1.
+Read more about the algorithm in the user guide or learn it inside out from my Outlier Detection course on DataCamp.
+
+1️⃣2️⃣. preprocessing.PowerTransformer
+Many linear models require some transformation of numeric features to make them normally distributed. StandardScaler and MinMaxScaler work pretty well for most distributions.
+
+However, when there is high skewness in the data, the core metrics of the distribution, such as mean, median, min, and maximum values, get affected. So, simple normalization and standardization do not work on skewed distributions.
+
+Instead, Sklearn implements PowerTransformer that uses logarithmic transform to turn any skewed feature into a normal distribution as close as possible. Consider these two features in the Diamonds dataset:
+
+
+png
+Image by author
+Both are heavily skewed. Let’s fix that using a logarithmic transform:
+
+
+png
+Image by author
+The skewness is gone! You can read more about different types of feature transformations here:
+
+How to Differentiate Between Scaling, Normalization, and Log Transformations
+Get practical knowledge in feature engineering numeric variables
+towardsdatascience.com
+
+1️⃣3️⃣. preprocessing.RobustScaler
+Another numeric transformer in Sklearn is RobustScaler. You can probably guess what it does from its name - it can transform features in a way that is robust to outliers. If outliers are present in a feature, it is hard to make them normally distributed because they can heavily skew the mean and the standard deviation.
+
+Instead of using mean/std, RobustScaler scales the data using median and IQR (interquartile range) since both metrics are not biased because of outliers. You can also read about it in the user guide.
+
+1️⃣4️⃣. compose.make_column_transformer
+In Sklearn, there is a shorthand for creating Pipeline instances with make_pipeline function. Instead of naming each step and making your code unnecessarily long, the function just accepts the transformers and estimators and does its job:
+
+
+Shortening the code to create Sklearn pipelines using the `make_pipeline` function.
+For more complex scenarios, ColumnTransformer is used, which has the same problem - each preprocessing step should be named, making your code long and unreadable. Thankfully, Sklearn offers a similar function to make_pipeline — make_column_transformer:
+
+
+Shortening the code to create ColumnTransformer objects using the `make_column_transformer` function.
+As you can see, using make_column_transformer is much shorter, and it takes care of naming each transformer step by itself.
+
+1️⃣5️⃣. compose.make_column_selector
+If you paid attention, we used select_dtypes function along with the columns attribute of pandas DataFrames to isolate numeric and categorical columns. While this works, there is a much more flexible and elegant solution to this using Sklearn.
+
+make_column_selector function creates a column selector that can be passed directly into ColumnTransformer instances. It works just like select_dtypes and better. It has dtype_include and dtype_exclude parameters to select columns based on the data type.
+
+If you need a custom column filter, you can even pass a regular expression to pattern while setting other parameters to None. Here is how it works:
+
+
+Instead of passing a list of column names, just pass an instance of make_column_selector with relevant parameters, and you are set!
+
+1️⃣6️⃣. preprocessing.OrdinalEncoder
+A common mistake among beginners is to use LabelEncoder to encode ordinal categorical features. If you have noticed, LabelEncoder allows transforming columns only one at a time rather than simultaneously like OneHotEncoder. You might think that Sklearn made a mistake!
+
+Actually, LabelEncoder should only be used to encode the response variable (y) as specified in its documentation. To encode the features array (X), you should use OrdinalEncoder which works as expected. It converts ordinal categorical columns to a feature with (0, n_categories - 1) classes. And it does this across all specified columns in a single line of code, making it possible to include it in pipelines.
+
+
+Encoding ordinal categorical features with OrdinalEncoder
+1️⃣7️⃣. metrics.get_scorer
+There are more than 50 metrics built-in to Sklearn, and their textual names can be seen in sklearn.metrics.SCORERS.keys(). In a single project, you might have to use several metrics and import them if you are using them separately.
+
+Importing a lot of metrics from sklearn.metrics directly might pollute your namespace and become unnecessarily long. As a solution, you can use metrics.get_scorer function to access any metric with its text name without ever importing it:
+
+
+Using metrics without importing them with the get_scorer function
+1️⃣8️⃣. model_selection.HalvingGrid and HalvingRandomSearchCV
+In version 0.24 of Sklearn, we got introduced to two experimental hyperparameter optimizers: HalvingGridSearchCV and HalvingRandomSearchCV classes.
+
+Unlike their exhaustive cousins GridSearch and RandomizedSearch, the new classes use a technique called successive halving. Instead of training all candidate sets (sets of parameter combinations) on all data, only a subset of data is given to the parameters. The worst-performing candidates are filtered out by training them on a smaller subset of data. After each iteration, the training samples increase by some factor, and the number of possible candidates decreases by as much leading to a much faster evaluation time.
+
+How much faster? In the experiments I have conducted, HalvingGridSearch was 11 times faster than regular GridSearch, and HalvingRandomSearch was even 10 times faster than HalvingGridSearch. You can read my detailed overview of Successive Halving and my experiments from here:
+
+11 Times Faster Hyperparameter Tuning with HalvingGridSearch
+Edit description
+towardsdatascience.com
+
+1️⃣9️⃣. sklearn.utils
+Last but not least, Sklearn has a whole host of utility and helper functions under sklearn.utils subpackage. Sklearn itself uses the functions in this module to build all the transformers and estimators we all use.
+
+There are many useful ones, such as class_weight.compute_class_weight, estimator_html_repr, shuffle, check_X_y, etc. You can use them in your own workflow to make your code more Sklearn-like, or they may come in handy when creating custom transformers and estimators that fit into Sklearn API.
+
+Summary
+Even though libraries such as CatBoost, XGBoost, and LightGBM are slowly carving a chunk from the top spot from Sklearn as a leading ML library, it still remains an invaluable part of the modern ML engineer’s skill stack.
+
+The consistent API, exceptional code design, and the ability to create robust ML workflows still make Sklearn unparalleled in terms of functionality and flexibility. Even though we can accomplish a lot with the basics, this article showed that Sklearn has much more to offer than meets the eye!
+
+Thank you for reading!
+
+Loved this article and, let’s face it, its bizarre writing style? Imagine having access to dozens more just like it, all written by a brilliant, charming, witty author (that’s me, by the way :).
+
+For only 4.99$ membership, you will get access to not just my stories, but a treasure trove of knowledge from the best and brightest minds on Medium. And if you use my referral link, you will earn my supernova of gratitude and a virtual high-five for supporting my work.

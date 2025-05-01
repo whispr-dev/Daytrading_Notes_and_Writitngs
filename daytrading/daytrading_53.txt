@@ -1,0 +1,100 @@
+How to split data into three sets (train, validation, and test) And why?
+Sklearn train test split is not enough. We need something better, and faster
+Samarth Agrawal
+Towards Data Science
+Samarth Agrawal
+
+·
+Follow
+
+Published in
+Towards Data Science
+
+·
+5 min read
+·
+May 17, 2021
+256
+
+
+3
+
+
+
+
+
+
+Photo by Nathan Dumlao on Unsplash
+INTRODUCTION
+Why do you need to split data?
+
+You don’t want your model to over-learn from training data and perform poorly after being deployed in production. You need to have a mechanism to assess how well your model is generalizing. Hence, you need to separate your input data into training, validation, and testing subsets to prevent your model from overfitting and to evaluate your model effectively.
+
+In this post, we will cover the following things.
+
+A brief definition of training, validation, and testing datasets
+Ready to use code for creating these datasets (2 methods)
+Understand the science behind dataset split ratio
+Definition of Train-Valid-Test Split
+Train-Valid-Test split is a technique to evaluate the performance of your machine learning model — classification or regression alike. You take a given dataset and divide it into three subsets. A brief description of the role of each of these datasets is below.
+
+Train Dataset
+Set of data used for learning (by the model), that is, to fit the parameters to the machine learning model
+Valid Dataset
+Set of data used to provide an unbiased evaluation of a model fitted on the training dataset while tuning model hyperparameters.
+Also play a role in other forms of model preparation, such as feature selection, threshold cut-off selection.
+Test Dataset
+Set of data used to provide an unbiased evaluation of a final model fitted on the training dataset.
+Read this article by Jason Brownlee if you want to know more about how experts in machine learning define train, test, and validation datasets. Link in the references sections below #1
+
+Ready to use code snippets
+In this post we will see two ways of splitting the data into train, valid and test set —
+
+Splitting Randomly
+Splitting using the temporal component
+1. Splitting Randomly
+You can’t evaluate the predictive performance of a model with the same data you used for training. It would be best if you evaluated the model with new data that hasn’t been seen by the model before. Randomly splitting the data is the most commonly used method for that unbiased evaluation.
+
+
+Randomly split the input data into train, valid, and test set. Image by Author
+i. Using Sklearn → ‘train_test_split’
+
+In the code snippet below, you will learn how to use train_test_split twice to create the train | valid | test dataset of our desired proportions.
+
+
+ii. Using Fast_ml → ‘train_valid_test_split’
+
+In the code snippet below, you will learn how to use train_valid_test_split to create the train | valid | test dataset of our desired proportions in a single line of code.
+
+
+2) Splitting using the temporal component
+You can listen to Jeremy Howard in his fast.ai lectures on Machine Learning: Introduction to Machine Learning for Coders. In Lesson 3, he talks about “what makes a good validation set, and we use that discussion to pick a validation set for this new data.” #2
+
+He uses an example, “Let’s say you are building a model to predict next month’s sale. And if you have no way of knowing whether the model you have built is good at predicting sales a month ahead of time, then you have no way of knowing when you put a model in production whether it’s going to be any good.” #3
+
+Using that temporal variable is a more reliable way of splitting datasets whenever the dataset includes the date variable, and we want to predict something in the future. Hence we must use the latest samples for creating the validation and test dataset. The main idea is always choosing a subset of samples representing the data faithfully in our model will receive afterward (whether we face a real-world problem or a Kaggle competition).
+
+
+Train Valid Test Dataset after sorting the data. Image by Author
+i. Custom code
+
+In the code snippet below, you will learn how to write your custom code to create the train | valid | test dataset of our desired proportions after sorting the data. You can use this code directly after the slight modifications.
+
+
+ii. Using Fast_ml → ‘train_valid_test_split’
+
+In the code snippet below, you will learn how to use train_valid_test_split to create the train | valid | test dataset of our desired proportions after sorting the data. All of that in just a single line of code.
+
+
+The science behind dataset split ratio
+Often it is asked in what proportion to split your dataset into Train, Validation, and Test sets?
+
+This decision mainly depends on two things. First, the total number of samples in your data, and second, on the actual model you are training.
+
+Some models need substantial data to train upon, so you would optimize for the more extensive training sets in this case.
+Models with very few hyper-parameters will be easy to validate and tune, so you can probably reduce the size of your validation set.
+But if your model has many hyper-parameters, you would want to have a significant validation set as well.
+If you happen to have a model with no hyper-parameters or ones that cannot be easily tuned, you probably don’t need a validation set too.
+References
+#1 https://machinelearningmastery.com/difference-test-validation-datasets/ #2 https://www.fast.ai/2018/09/26/ml-launch/
+#3 https://www.youtube.com/watch?v=YSFG_W8JxBo

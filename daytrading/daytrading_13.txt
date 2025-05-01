@@ -1,0 +1,159 @@
+Top Real-Time Stock Price APIs for Startups in 2024
+Discover the Leading APIs to Easily and Reliably Fetch Real-Time Stock Data for Your Projects
+Eryk Lewinson
+DataDrivenInvestor
+Eryk Lewinson
+
+Eryk Lewinson
+Follow
+Eryk Lewinson
+12.7K Followers
+Data Scientist, quantitative finance, gamer. My latest book - Python for Finance Cookbook 2nd ed: https://t.ly/WHHP
+
+Book Author
+
+·
+Follow
+
+Published in
+DataDrivenInvestor
+
+·
+7 min read
+·
+Jul 8, 2024
+37
+
+
+1
+
+
+
+
+
+When working in or founding a startup connected to the financial markets, you will inevitably need stock data at some point. At that time, you’ll face a decision on how to obtain it. On one hand, you can spend significant resources building data pipelines to scrape data from various sources, which comes with considerable complexity. This includes finding reliable sources, developing a service that reads real-time data, storing that data for further analysis, and scaling across multiple markets. This is certainly not a small project.
+
+On the other hand, you can use an established data provider to get your stock prices, allowing you to focus on your company’s core business activities — the ones that give you a competitive edge and that might have inspired you to join or start the company in the first place.
+
+In this article, we will take a look at the leading providers of real-time stock prices. But first, we need to answer a very important question.
+
+
+Image generated with Midjourney
+What to look out for when choosing a data provider?
+When choosing a data provider, we should consider quite a few factors, including:
+
+Data Accuracy — As the famous adage goes, garbage in, garbage out. That is why we need to ensure the provider delivers accurate and reliable data since our business depends on it.
+Coverage — Depending on our use case, we should verify that the provider covers all the markets and financial instruments we might need.
+Historical Data — Real-time data is one thing, but we will likely also need accurate historical data for analysis and backtesting trading strategies.
+API Performance and Stability — The provider’s API needs to be stable and perform well under various conditions, especially as the startup grows and increases its number of requests. Consistent data access is crucial for financial applications.
+Latency — If we depend on real-time data, low latency is crucial.
+Security and Compliance — The provider should adhere to industry standards for security and comply with relevant regulations.
+Support and Documentation — Any engineer will swear by it: good support and comprehensive documentation are essential for smooth integration with any service and potential troubleshooting.
+Cost — Naturally, we couldn’t skip this one. You need to ensure that the service you are getting is good value for money and fits your budget.
+Now that we know what to look for when considering data providers, let’s explore the best providers currently on the market.
+
+8 best stock price APIs currently on the market
+Just to be clear, the order does not reflect any rating. :)
+
+1. Financial Modeling Prep
+FMP is a popular platform among users who need reliable financial data for various purposes, from investment analysis to building financial models and conducting research.
+
+Key features:
+
+Offers a wide range of financial assets, supporting over 70,000 stocks across multiple exchanges (global coverage).
+Provides not only real-time price data but also historical data (up to 30 years), company financial statements, SEC filings, economic indicators, and additional indicators such as market cap, dividend yield, earnings per share, etc.
+Easy-to-use and developer-friendly API supporting JSON and CSV formats, allowing seamless integration with various applications and platforms.
+Offers both paid and free tiers, enabling exploration of data without any commitment.
+Offers integration with Google Sheets and a dedicated Excel Add-on, thus simplifying access to any data from a spreadsheet.
+2. Refinitiv Eikon API
+Refinitiv Eikon API is widely used in the financial industry for its comprehensive data coverage, advanced analytics capabilities, and reliable real-time market information, making it a valuable tool for financial analysis and decision-making.
+
+Key Features:
+
+Offers access to real-time stock prices, comprehensive historical data, and real-time news and research reports from trusted sources.
+Integrated with Eikon desktop and web applications.
+Data from the API is highly reliable and accurate.
+Provides advanced analytics and visualization tools to analyze market trends and perform technical analysis.
+The robust and comprehensive API is designed to be developer-friendly, with documentation, code samples, and support available for integration and troubleshooting.
+Offers official libraries for Python and .NET.
+3. Morningstar API
+Morningstar, a leading provider of independent investment research, offers access to a wealth of financial data and investment research.
+
+Key Features:
+
+It offers comprehensive coverage of financial data, including real-time stock prices, mutual funds, stocks, ETFs, indexes, and more. Users can access detailed information about securities, performance metrics, and historical data.
+Users can retrieve Morningstar’s proprietary research reports, ratings, and analyst insights on various investment products and companies.
+User-friendly API with extensive documentation.
+Offers a dedicated Python library that makes accessing data much easier for data professionals.
+Morningstar offers The Intelligence Engine API, which uses generative AI to streamline the research process. Using chat-like requests, users can easily explore Morningstar’s investment research and data to find answers to their financial research questions.
+4. QUODD API (formerly Xignite)
+In 2023, QUODD acquired Xignite to improve its offering of financial data. QUODD’s client base includes both established financial institutions looking for comprehensive data management and integration solutions and fintech startups and developers, thanks to its API-centric model.
+
+Key Features:
+
+A mature platform with over 20 years of experience, focused on reliability and accuracy.
+Offers the widest coverage for cloud-based financial data, including real-time, delayed, historical, and reference data.
+Provides access to pricing data for global equities (1.2 million), currencies (29k pairs), commodities, fixed income, indices, options, futures, equity fundamentals, and much more.
+Cloud-based infrastructure allows for scalable and flexible data consumption, catering to different business needs.
+
+Image generated with Midjourney
+5. Bloomberg API
+If you have ever been interested in finance or financial analysis, you must know Bloomberg — a global financial services and software company providing a comprehensive suite of tools and services that are widely used by financial professionals worldwide.
+
+Key Features:
+
+Provides access to a vast array of financial data, analytics, trading tools, financial news, and economic indicators.
+Grants access to the unique Bloomberg datasets such as Bloomberg Indices, BVAL Pricing, and more.
+Offers extensive historical data coverage.
+Known for high accuracy and reliability of data.
+Provides extensive global market coverage.
+Offers advanced integration with the Bloomberg Terminal.
+Its SDK supports multiple programming languages: C++, .NET, Java, and Python.
+6. Reuters API
+Reuters, an established name in news coverage, has recently joined the game of providing high-quality real-time and historical financial data and market analysis.
+
+Key Features:
+
+Access to real-time and historical data for equities, fixed income, commodities, currencies, and more.
+Offers extensive market coverage and a high degree of accuracy.
+Seamlessly integrates with various trading and analytics platforms.
+Provides access to breaking news, in-depth reports, and market analysis from Reuters’ global news network.
+
+Image generated with Midjourney
+7. FactSet API
+FactSet provides an API tailored for financial professionals and developers seeking comprehensive financial data, analytics, and portfolio management solutions.
+
+Key Features:
+
+Provides access to real-time and historical market data, company fundamentals, economic indicators, and more.
+Offers extensive coverage of global markets.
+Comprehensive documentation providing code samples in Python, R, and C#.
+Offers SDK libraries for C#, Python, Java, and TypeScript/JavaScript.
+Leverages machine learning (ML) and artificial intelligence (AI) to provide a Natural Language Processing (NLP) API for extracting meaningful information from unstructured text, and a conversational API allowing users to request data from FactSet using natural language queries.
+8. Tradier API
+Tradier aims to help both developers and active traders access real-time stock data, market data, and analytics tools.
+
+Key Features:
+
+Provides real-time and historical market data, including quotes, option chains, and market news.
+By allowing access to a comprehensive brokerage platform, it supports placing, modifying, and canceling orders across various asset classes, including equities and options.
+Some other platforms
+While we have already covered some of the most popular financial data providers, there are many other established platforms, each offering something unique for its customers. That is why I would encourage you to explore some of the following:
+
+Alpha Vantage
+barchart OnDemand
+polygon.io
+Intrinio
+Finnhub
+Yahoo Finance
+Twelve Data
+Tiingo
+IEX Cloud
+EOD Historical Data
+openfin
+marketstack
+Wrapping up
+We have explored 8 of the most popular financial data providers. It is still difficult to say which one is the best, as each offers unique features to attract clients. My personal advice would be to thoroughly review what is accessible via their API. Ideally, start with a free tier (for example, with FMP) to explore the data and determine if it meets your needs. Only decide to a purchase when you are 100% sure that the provider offers exactly what you need and that you would get a good value for money.
+
+I’d be curious to hear about your experience with obtaining financial data! Do you have a favorite provider? Maybe I have missed something? You can reach out to me on LinkedIn, Twitter, or in the comments :)
+

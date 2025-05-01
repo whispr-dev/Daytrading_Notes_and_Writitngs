@@ -1,0 +1,279 @@
+Using adaptative Laguerre filter in trend following strategies
+From Schrodinger equation to technical trading
+Sebastien M. Laignel
+Coinmonks
+Sebastien M. Laignel
+
+·
+Follow
+
+Published in
+Coinmonks
+
+·
+9 min read
+·
+Sep 13, 2024
+38
+
+
+
+
+
+
+Published on 13th September.
+
+1. A recap from May onwards
+In my last article from May, I explored a potential source of alpha in the turn-of-the-month effect using the TLT ETF. Various boundary effects exist in financial markets, and systematically studying these phenomena presents an intriguing direction for future articles.
+
+In June, I published a piece offering trading guidelines for small-cap stocks, focusing on breakout detection — a concept I often considered the “holy grail” of day trading. Unfortunately, the article was deleted shortly after publication due to a technical mishap. The premise was simple: what if one could systematically identify the day’s biggest movers? The results were initially impressive but were limited to a static universe of equities. My code was too prone to overfitting, making it difficult to generalize to dynamic universes. Live trading tests were disappointing, leading me to conclude that a neural network approach might be more effective. By clustering stocks based on price behavior and training a neural network to recognize typical breakout patterns, sustainable trading results in a dynamic universe could be achievable.
+
+Among these research avenues, I also tested a classical algorithm based on momentum ranking by adapting a freely available strategy from the QuantConnect trading library. Backtest results were promising, but the market conditions in July and August, combined with my lack of monitoring due to professional commitments, led me to disconnect the algorithm. It was overtrading, resulting in only a slightly positive PnL.
+
+After a few weeks away from trading, I launched a significantly more performant algorithm based on price action pattern detection. In just three weeks of live trading, the algorithm has achieved a 6% return. I am currently in the process of ramping up capital allocation and plan to explain this algorithm in detail in an upcoming article.
+
+Notably, this algorithm is also available in the QuantConnect trading strategies library; I simply refactored it and corrected a bug. This experience has led me to reconsider my approach: rather than spending extensive time developing new strategies in isolation, I can improve or adapt codes created by professional quants.
+
+While this will be my direction for running live algorithms, I remain interested in conducting full research workflows — from academic papers to code development. I also intend to develop an AI-based tool for this purpose. Interested readers can refer to some of my articles exploring dual-agent architecture and various posts on my LinkedIn page.
+
+2. Introduction
+Quantitative trading relies heavily on mathematical models and algorithms to inform trading decisions. Among the various tools and techniques used in this field, the Laguerre filter is particularly noteworthy for its ability to smooth data and reduce noise, thereby facilitating trend identification and informed decision-making. This article will explore the Laguerre filter, its mathematical foundation, and its application in quantitative trading.
+
+One of the key advantages of the Laguerre filter is its reduced lag. Compared to traditional moving averages, the Laguerre filter introduces less lag, making it more responsive to recent price changes. It effectively smooths data, making it easier to identify trends without being distracted by short-term fluctuations. Additionally, the smoothing factor can be adjusted to suit different trading strategies and timeframes.
+
+3. From Laguerre polynomials to Laguerre filter
+The Laguerre polynomials Ln​(x) are defined by the following Rodrigues’ formula:
+
+
+With respect to the inner product below, they form an orthogonal basis in the Hilbert space of square integrable functions on the interval [0,∞) :
+
+
+This orthogonal basis is complete: any function f(x) in this space can be represented as a serie of Laguerre polynomials.
+
+In terms of financial series studies, orthogonality ensures that noise components can be filtered out independently, preserving the underlying trend. Completeness allows for the entire signal, encompassing both trend and noise, to be fully represented and analyzed. Additionally, the adaptive nature of the filter, achieved by adjusting the number of terms in the series, enables it to respond to various market conditions, effectively capturing both rapid changes and stable trends.
+
+Laguerre polynomials satisfy the following recursion formula:
+
+
+For our purposes, we are interested in a simplified form of Laguerre polynomials, which are utilized to create a smoothing filter. The basic Laguerre filter comprises four polynomials (L0, L1, L2, L3), each dependent on a single parameter, gamma (0 < gamma < 1). The choice of gamma influences the filter’s responsiveness. We begin by setting the initial value of gamma, typically around 0.5. This parameter controls the filter’s memory: a smaller gamma makes the filter more reactive to recent changes, while a larger gamma results in a smoother output. The Laguerre polynomials are then calculated recursively. For a given gamma, the polynomials are defined as shown in the snippet below:
+
+class AdaptiveLaguerreFilter(PythonIndicator):
+    def __init__(self, gamma):
+        self.gamma = gamma
+        self.l0 = 0
+        self.l1 = 0
+        self.l2 = 0
+        self.l3 = 0
+        self.prevPrice = 0
+        self.Value = 0
+        self.Samples = 0
+
+    def Update(self, time, price):
+        self.l0 = (1 - self.gamma) * price + self.gamma * self.l0
+        self.l1 = -self.gamma * self.l0 + self.l0 + self.gamma * self.l1
+        self.l2 = -self.gamma * self.l1 + self.l1 + self.gamma * self.l2
+        self.l3 = -self.gamma * self.l2 + self.l2 + self.gamma * self.l3
+
+        self.Value = (self.l0 + 2 * self.l1 + 2 * self.l2 + self.l3) / 6
+        self.prevPrice = price
+        self.Samples += 1
+The filtered value is a linear combination of the polynomials, expressed as follows:
+
+self.Value = (self.l0 + 2 * self.l1 + 2 * self.l2 + self.l3) / 6
+4. Benchmark before implementation
+We will employ a buy-and-hold strategy on SPY to establish a benchmark and compare it to the performance of an adaptive Laguerre filter applied to the same equity over the same period. The backtest period will commence on January 1, 2024. Following the backtest detailed below, the benchmark is established at 20%.
+
+
+Buy and Hold SPY in 2024 — Powered by QuantConnect
+5. Implementation
+I have tested the following implementation with hourly granularity over the same period:
+
+from AlgorithmImports import *
+
+class AdaptiveLaguerreFilterAlgorithm(QCAlgorithm):
+
+    def Initialize(self):
+        self.SetStartDate(2024, 1, 1)
+        self.SetCash(100000)
+
+        self.spy = self.AddEquity("SPY", Resolution.Hour).Symbol
+        self.laguerreFilter = AdaptiveLaguerreFilter(0.3)
+        
+        # Warm up the indicator with historical data
+        history = self.History(self.spy, 200, Resolution.Hour)
+        for bar in history.itertuples():
+            self.laguerreFilter.Update(bar.Index[1], bar.close)
+
+    def OnData(self, data):
+        if not data.Bars.ContainsKey(self.spy):
+            return
+
+        price = data[self.spy].Close
+        self.laguerreFilter.Update(data.Time, price)
+
+        if not self.laguerreFilter.IsReady:
+            return
+
+        currentPosition = self.Portfolio[self.spy].Quantity
+        signal = self.laguerreFilter.Current.Value
+
+        tolerance = 0.001
+
+        if currentPosition <= 0 and price > signal + tolerance:
+            self.SetHoldings(self.spy, 1.0)
+        elif currentPosition >= 0 and price < signal - tolerance:
+            self.SetHoldings(self.spy, -1.0)
+
+
+class AdaptiveLaguerreFilter(PythonIndicator):
+    def __init__(self, gamma):
+        self.gamma = gamma
+        self.l0 = 0
+        self.l1 = 0
+        self.l2 = 0
+        self.l3 = 0
+        self.prevPrice = 0
+        self.Value = 0
+        self.Samples = 0
+
+    def Update(self, time, price):
+        self.l0 = (1 - self.gamma) * price + self.gamma * self.l0
+        self.l1 = -self.gamma * self.l0 + self.l0 + self.gamma * self.l1
+        self.l2 = -self.gamma * self.l1 + self.l1 + self.gamma * self.l2
+        self.l3 = -self.gamma * self.l2 + self.l2 + self.gamma * self.l3
+
+        self.Value = (self.l0 + 2 * self.l1 + 2 * self.l2 + self.l3) / 6
+        self.prevPrice = price
+        self.Samples += 1
+
+    @property
+    def IsReady(self):
+        return self.Samples > 3
+
+    @property
+    def Current(self):
+        return self
+
+    def __repr__(self):
+        return f"AdaptiveLaguerreFilter({self.Value})"
+
+    def Reset(self):
+        self.l0 = self.l1 = self.l2 = self.l3 = 0
+        self.prevPrice = 0
+        self.Samples = 0
+The trading logic of the algorithm is based on utilizing the Adaptive Laguerre Filter (ALF) to identify trends and generate buy and sell signals. When the current price of SPY is above the Laguerre filter value plus a small tolerance, it indicates an upward trend, prompting the algorithm to buy SPY. Conversely, when the current price is below the Laguerre filter value minus the tolerance, it signals a downward trend, leading the algorithm to sell SPY. This approach enables the algorithm to capture significant trends while filtering out short-term noise, ensuring that trades are made based on meaningful price movements. In this straightforward strategy, the ALF functions as a dynamic price support, similar to the Volume Weighted Average Price (VWAP) or a weighted moving average.
+
+
+An implementation of Adaptive Laguerre Filter in SPY with 1H granularity — Powered by QuantConnect
+With an appropriate choice of the gamma parameter, the strategy using the ALF slightly outperforms the buy-and-hold strategy for SPY in 2024.
+
+6. Code refactoring (section added 14th Septembre 2024)
+To facilitate further refinement and scaling, I have refactored the code and will now concentrate on the alpha model, adhering to the QuantConnect coding framework. Here is the first version of the alpha model :
+
+class AdaptiveLaguerreFilterAlphaModel(AlphaModel):
+    def __init__(self, gamma):
+        self.gamma = gamma
+        self.laguerreFilter = AdaptiveLaguerreFilter(gamma)
+        self.symbolData = {}
+
+    def Update(self, algorithm, data):
+        insights = []
+        for symbol, symbolData in self.symbolData.items():
+            if not data.Bars.ContainsKey(symbol):
+                continue
+
+            price = data[symbol].Close
+            symbolData['filter'].Update(data.Time, price)
+
+            if not symbolData['filter'].IsReady:
+                continue
+
+            signal = symbolData['filter'].Current.Value
+            tolerance = 0.001
+
+            if symbolData['position'] <= 0 and price > signal + tolerance:
+                insights.append(Insight.Price(symbol, timedelta(hours=1), InsightDirection.Up))
+            elif symbolData['position'] >= 0 and price < signal - tolerance:
+                insights.append(Insight.Price(symbol, timedelta(hours=1), InsightDirection.Down))
+
+        return insights
+
+    def OnSecuritiesChanged(self, algorithm, changes):
+        for added in changes.AddedSecurities:
+            self.symbolData[added.Symbol] = {
+                'filter': AdaptiveLaguerreFilter(self.gamma),
+                'position': 0
+            }
+
+        for removed in changes.RemovedSecurities:
+            if removed.Symbol in self.symbolData:
+                del self.symbolData[removed.Symbol]
+
+
+class AdaptiveLaguerreFilter(PythonIndicator):
+    def __init__(self, gamma):
+        self.gamma = gamma
+        self.l0 = 0
+        self.l1 = 0
+        self.l2 = 0
+        self.l3 = 0
+        self.prevPrice = 0
+        self.Value = 0
+        self.Samples = 0
+
+    def Update(self, time, price):
+        self.l0 = (1 - self.gamma) * price + self.gamma * self.l0
+        self.l1 = -self.gamma * self.l0 + self.l0 + self.gamma * self.l1
+        self.l2 = -self.gamma * self.l1 + self.l1 + self.gamma * self.l2
+        self.l3 = -self.gamma * self.l2 + self.l2 + self.gamma * self.l3
+
+        self.Value = (self.l0 + 2 * self.l1 + 2 * self.l2 + self.l3) / 6
+        self.prevPrice = price
+        self.Samples += 1
+
+    @property
+    def IsReady(self):
+        return self.Samples > 3
+
+    @property
+    def Current(self):
+        return self
+
+    def __repr__(self):
+        return f"AdaptiveLaguerreFilter({self.Value})"
+
+    def Reset(self):
+        self.l0 = self.l1 = self.l2 = self.l3 = 0
+        self.prevPrice = 0
+        self.Samples = 0
+The question is how to improve this alpha model ?
+
+Work in progress. Feel free to let ideas in comments.
+
+8. Main take aways
+Following various choices of the gamma parameter and different granularities, the Adaptive Laguerre Filter (ALF) appears to correctly follow trends, provided the smoothing parameter is appropriately chosen. In my trial, the parameter was heuristically set at 0.3. Most of the orders were placed by the ‘short leg’ of the strategy, indicating that the filtered value has more significance as a support level than as a trend indicator. The performance advantage over the buy-and-hold strategy tends to diminish over time, necessitating periodic re-adjustment of the parameter to maintain consistent efficiency.
+
+In fact, in a dynamic version, the gamma parameter could include a volatility measure and be automatically adjusted to market regimes. Daily granularity did not yield significant results over the buy-and-hold strategy, suggesting that the indicator is more suited to higher-frequency trading. These observations support the integration of the ALF among the indicators worth considering, and as such, it may probably not be used in isolation to generate robust signals. As far as I know, TradingView and NinjaTrader propose built-in ALF.
+
+9. Conclusion and future directions
+Indeed, Laguerre polynomials are also known for their role in solving the radial part of the Schrödinger equation for the hydrogen atom, demonstrating their versatility. Their application in technical trading highlights their broad utility. This raises intriguing questions about the optimal decomposition of stochastic processes in terms of polynomial representations. The space of square-integrable functions can be represented by a set of complete and orthogonal polynomials, such as Laguerre, Hermite, or Legendre polynomials, as well as through Fourier or wavelet analysis.
+
+Determining the optimal decomposition of a stochastic process using these polynomial representations could significantly aid in designing proprietary and specific filters tailored to different classes of assets and market regimes. Such an approach could enhance the precision and effectiveness of financial models.
+
+References
+O.Groette, Adaptative Laguerre filter, strategy and rules — August 2024
+Adaptive Laguerre Filter - Strategy And Rules - Quantified Strategies
+In the fast-paced financial trading world, using the most responsive indicators for your technical analysis is key to…
+www.quantifiedstrategies.com
+
+2. Vladimir, QuantConnect communauty, Another digital filter — Laguerre filter — June 2021
+
+Another Digital Filter - Laguerre Filter.
+Implementation of Laguerre Filter as custom indicator for generating alphas on QuantConnect.
+www.quantconnect.com
+
+Disclaimer : This article is for educational purposes only and is not financial or investment advice. Strategies discussed, including the Adaptive Laguerre Filter, are not guaranteed to be profitable. Financial markets are risky, and past performance does not predict future results. The author and publisher are not responsible for any losses or damages from using this information. By reading this article, you agree that you are solely responsible for your investment decisions.
+
+Happy trading and coding.
+
+Sebastien LAIGNEL

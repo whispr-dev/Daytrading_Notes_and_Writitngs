@@ -1,0 +1,153 @@
+Chapter 5: Clustering, Cointegration & Anomaly Detection
+So far, we’ve focused on single-asset modeling — signals, filters, and forecast logic for one symbol.
+
+But as soon as you trade more than one asset, you face new problems… and new opportunities:
+
+Which stocks are similar (and how do we define “similar”)?
+
+Can we predict divergence after convergence?
+
+Are we missing something weird — anomalies — that signal alpha?
+
+This chapter is about clustering, anomaly detection, and cointegration — tools to understand relationships between assets and spot unusual behavior early.
+
+🤝 Clustering Assets by Behavior
+Let’s start with clustering. Imagine you want to trade a dozen S&P 500 stocks — but instead of treating them as isolated instruments, you want to group them based on how they behave.
+
+📊 K-Means: Fast and Simple
+We use returns and volatility as features, like this:
+
+python
+Copy
+Edit
+import yfinance as yf
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
+from math import sqrt
+
+tickers = ['AAPL', 'NVDA', 'META', 'AMZN', 'SPY']
+data = yf.download(tickers, start="2022-01-01", end="2023-12-31")['Adj Close']
+returns = data.pct_change().mean() * 252
+volatility = data.pct_change().std() * sqrt(252)
+
+df = pd.DataFrame({'Return': returns, 'Volatility': volatility})
+kmeans = KMeans(n_clusters=3).fit(df)
+df['Cluster'] = kmeans.labels_
+Plotting this gives you a map of asset similarity. Great for:
+
+Basket trades
+
+Portfolio rebalancing
+
+Filtering for unique behavior
+
+But K-Means doesn’t account for time — it treats returns as static.
+
+🕸️ Dynamic Clustering: Hierarchical + DTW
+When you need to cluster entire time series, you switch to Dynamic Time Warping (DTW).
+
+DTW measures how similar two sequences are even if they are misaligned in time. That’s perfect for financial data, where two stocks may rise and fall together — just slightly out of phase.
+
+python
+Copy
+Edit
+from dtaidistance import dtw
+from scipy.cluster.hierarchy import linkage, dendrogram
+import matplotlib.pyplot as plt
+
+# Compute DTW distances between all series
+dist_matrix = np.zeros((len(tickers), len(tickers)))
+for i, t1 in enumerate(tickers):
+    for j, t2 in enumerate(tickers):
+        if i < j:
+            dist = dtw.distance(data[t1].dropna(), data[t2].dropna())
+            dist_matrix[i, j] = dist_matrix[j, i] = dist
+
+# Hierarchical clustering
+linked = linkage(dist_matrix, 'single')
+plt.figure(figsize=(10, 5))
+dendrogram(linked, labels=tickers)
+plt.title("Stock Similarity (DTW Hierarchical Clustering)")
+plt.show()
+This helps detect behavioral clusters that move together — great for pairs trading, mean reversion, or dispersion trading.
+
+🔍 Anomaly Detection with Isolation Forest
+Some of the best trades come from detecting weird behavior — a stock breaking from its usual pattern.
+
+We use IsolationForest from scikit-learn:
+
+python
+Copy
+Edit
+from sklearn.ensemble import IsolationForest
+
+features = df[['Return', 'Volatility']]
+iso = IsolationForest(contamination=0.1)
+df['Anomaly'] = iso.fit_predict(features)
+Assets marked with -1 are anomalies. That could mean:
+
+A breakout is starting
+
+A major news event
+
+Mispricing (aka opportunity)
+
+Now combine this with lag-aware models — and boom, you’ve got a high-probability setup detector.
+
+🔗 Cointegration: The Holy Grail of Pair Trades
+Let’s say AAPL and MSFT move together historically. You find they’re cointegrated — statistically linked in price.
+
+When their prices diverge, you long the underperformer and short the outperformer — expecting them to converge again.
+
+Python code using statsmodels:
+
+python
+Copy
+Edit
+from statsmodels.tsa.stattools import coint
+
+score, pvalue, _ = coint(data['AAPL'], data['MSFT'])
+print(f"Cointegration p-value: {pvalue}")
+If p < 0.05, you’ve got a cointegrated pair — and the spread between them is a stationary time series you can model with:
+
+Kalman filters
+
+HMMs (Hidden Markov Models)
+
+Mean-reverting LSTM
+
+And yes — this is exactly how many hedge funds build pair trade engines.
+
+🧠 Bonus: 3D X-Plots
+From [21†daytrading_16.txt], you can even plot 3D X-Plots to visualize multi-asset similarity:
+
+X, Y, Z = 3 assets
+
+Each point = return vector at a time slice
+
+Cluster center = mean behavior
+
+You can then track distance from center — and trigger trades when an asset deviates from its norm.
+
+📉 Example: META Anomaly Detection
+We train an Isolation Forest just on META returns and detect outliers:
+
+python
+Copy
+Edit
+meta = data['META'].pct_change().dropna()
+iso = IsolationForest(contamination=0.05)
+anomalies = iso.fit_predict(meta.values.reshape(-1, 1))
+Overlaying anomalies on a chart gives you a "spike detector" — marking points of extreme divergence, which often precede big moves.
+
+🧩 What You Gain
+By combining clustering, anomaly detection, and cointegration:
+
+You understand the market’s structure — not just price
+
+You identify mispriced moments
+
+You construct smarter, more diverse trade ideas
+
+Next, we’ll talk about turning these insights into a real-time trading system — with support/resistance, news feeds, and anomaly flags all flowing into one actionable dashboard.

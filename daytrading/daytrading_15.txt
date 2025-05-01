@@ -1,0 +1,203 @@
+Applications of Rolling Windows for Time Series, with Python
+Here’s some powerful applications of Rolling Windows and Time Series
+Piero Paialunga
+Towards Data Science
+Piero Paialunga
+
+·
+Follow
+
+Published in
+Towards Data Science
+
+·
+11 min read
+·
+Sep 15, 2024
+455
+
+
+3
+
+
+
+
+
+
+Photo by Claudia Aran on Unsplash
+Last night I was doing laundry with my wife. We have this non-verbal agreement (it becomes pretty verbal when I break it though) about laundry: she is the one who puts the laundry in the washer and drier and I am the one who folds it.
+
+The way we do this is usually like this:
+
+
+Image made by author using DALLE
+Now, I don’t really fold all the clothes and put them away. Otherwise, I would be swimming in clothes. What I do is an approach that reminds me of the rolling window method:
+
+
+Image made by author using DALLE
+Why do I say that it reminds me of a rolling window? Let’s see the analogy.
+
+
+Image made by author using DALLE
+The idea of rolling windows is exactly the one that I apply when folding laundry. I have a task to do but you don’t do it all at once, because it would be nonpractical and not useful. Instead, I do it on a small portion of “data”, then store the “result”, and then move to the next section of “data”.
+
+This idea looks very simple, but there are SO MANY things you can do with Rolling Windows, as this very simple approach is also incredibly powerful.
+
+In this blog post, I want to describe very briefly what rolling windows are on a technical level, then show a few powerful applications of rolling windows on some specific tasks that are often required when dealing with a signal.
+
+We will do this in the following order:
+
+A technical introduction about the rolling windows idea
+We’ll use rolling windows as feature extractors (first use case)
+We’ll use rolling windows as a smoother/noise reducer (second use case)
+We’ll use rolling windows to extract peaks and valleys of a signal (third use case)
+We’ll use rolling windows to perform a Fourier Transform (fourth use case)
+A lot to cover, better get started! :)
+
+1. About Rolling Windows
+First off, our Avatar World for this example is signals.
+
+Let’s define our signal: the signal is a discrete object y[t] with t that is our index and can go from 0 to len(signal)-1 (t≥0 and t≤len(y)-1). For every position t, the rolling window covers the segment y[t],y[t+1],…,y[t+n−1]. For example, the first window is:
+
+
+Image made by author
+Beautiful, we defined the window. Now we got to do something with it.
+
+The result of the application of the rolling window is:
+
+
+Image made by author
+Now, who is O and who is M? That depends on what you are actually doing with your rolling window. Are you doing a rolling_mean? If that is the case M_0 is a single point and O(w_0) is just the average operation of all the points from 0 to n-1. If you are doing a Short Time Fourier Transform then, for a given window you will have the whole vector of frequencies. So the dimension of M_0 is much larger than 1 and O is the Short Time Fourier Transform operation (more about this later).
+
+Whatever your case study might be, M_0 will be your first entry for your rolling window result.
+
+What is the next step? We identify the next window by moving s steps (stride) and we perform the same operation. For example, if stride s = 1 (maximum overlap), we get:
+
+
+Image made by author
+If stride = n (maximum stride) then we have:
+
+
+Image made by author
+And M_1 = O(w_1).
+
+I know it might sound very confusing, but that’s ok: we will cover everything in the next chapters. The only thing I want you to keep in mind is this idea that we select a window of our signal, process it, extract the result, and move to the next window. Just like this:
+
+
+Image made by author
+We’ll learn by doing. Let’s start with the first application!
+
+2. Rolling Windows as Feature Extractors
+Imagine that you don’t have one signal, but you have multiple ones. Every signal can come from source 1,2,3,…,k.
+
+Signals coming from the same source have similar averages, standard deviations, or peak-to-peak distances. Signals coming from two different sources have bits of data that are completely different.
+
+For example, a signal coming from source 1 and a signal coming from source k have completely different averages in the first bit of the signal and similar averages in the last bit of the signal.
+
+In this case, it is very useful to implement a simple Machine Learning classification algorithm (e.g. Logistic Regression, Random Forest, SVC,…).
+Nonetheless, it is a waste to apply those algorithms to the whole signal. It is much simpler to do so once you extract the features using a rolling window.
+What I mean by that is that you take your signal, you run it through a rolling window that extracts statistical features (e.g. mean, std, peak to peak distance) for every given window, and you use those features in place of the long signal. This can drastically reduce the number of points you need to consider to perform your ML task while preserving all the information you need to maintain a high level of performance.
+
+For example, let’s consider the case where we have a quadratic signal (y=x²) with a middle random disturbance and a high frequency disturbance:
+
+
+This is a signal of 500 points. We can drastically reduce the information by applying this rolling window:
+
+
+Here I’m computing the mean (average value), standard deviation (dispersion around the mean), peak to peak (max-min) and energy (complexity of the window), but it doesn’t have to be like this! You can consider the mean only, for example, or actually add more features. You can also change the sride and the window size. This is up to you. Consider that, as a smart person once said “the model needs to be as complex as needed but not more complex than that”, so don’t add too many features if you don’t actually need them. A small window size considers more granular information, a larger window size considers more gross features. Consider adjusting that as well based on your needs.
+
+If we want to apply this to multiple signals, the code is extremely easy and it is the following:
+
+
+So for example, we have that, for the first signal, the mean for the first window is 7.26, the mean for the 2 window is 15.19 and so on and so forth.
+This method is extremely helpful when we want the gross feature of a signal, without getting lost in its continous behavior.
+
+3. Smoothing Rolling Window
+The method I’m going to show here is known as Savitzky-Golay filter. It’s a method I really love because it is simple, extremely elegant, and very helpful for cases where a smoothing of a signal is required.
+
+This method uses a rolling window and fits a polynomial for every rolling window. For example, if you have data from 0 to 100 you do a polynomial fit of that dataset, then you extract the data from the fit you did on the specific window, replace the value based on your polynomial fit, then you go to the next window.
+
+The math can be a little tricky (not too much, I’d say an evening of pen and paper) but the implementation is very easy, so let’s dive in.
+
+Let’s consider our little quadratic signal with noise added in:
+
+
+Now our rolling window is literally one line of code. This:
+
+savgol_filter(combined_signal, 5, 2)
+So that’s the application:
+
+
+As we can see, the rolling window has almost completely zeroed the noise. The blue line is almost identical to the quadratic dependency we put in, and the Noise is almost identical to signal-filtered_signal.
+
+I would say that when you have a signal to clean and you can anticipate that the problem is in the higher frequency, your first shot (and probably last one too, as it works very well) should most likely be the Savitzky-Golay filter.
+
+4. Rolling windows for Peak Detection
+Now imagine you want to detect peaks, as a human travelling throughout the signal (I know, it’s weird, you have to trust me on this a little). You start “walking” and see the first value of the signal: y[0], and you put it in your backpack. Then you see the second value: y[1], you put it in your backpack. You keep going like this to the point of window size: let’s say 100. At this point, in your backpack you have a lot of history. You have 100 points, and you can use them to compute the mean and std. Is point 101 reasonable, given that mean and std? If yes, then it’s not a peak. If not then it is a peak!
+
+Then you go to point 102, you consider the mean and std from point 1 (not 0!!!) to 101 as reference, and classify that point.
+
+Now, if I find a peak, do I consider that in the mean and std? We can set that as a parameter, called influence. You can ignore it completely influence=0 or all of it influence=1.
+
+I implemented this method from scratch (so we have more control on it). I generated an object with RealTimePeakDetector().
+
+
+The signal we consider is the sin(2\pi t) + noise. Let’s add 4 peaks in random positions. Once we define it we have:
+
+detector = RealTimePeakDetector(signal,threshold=2.5)
+With threshold = 2.5 that is the number of standard deviation that we consider to classify a new point as a peak. If the point is:
+
+point > mean + threshold*std -> positive peak
+point < mean -threshold*std -> negative peak
+We run throughout the signal and detect the peaks using this:
+
+signals = []
+for i in range(len(signal)):
+    signals.append(detector.detect_peak(signal[i]))
+We can run everything in a single block of code:
+
+
+There is a whole literature about peak detection, so this method is obviously not going to be an evergreen that can be used every time. Nonetheless, using a rolling window for peak detection can be a simple and effective solution in many real-world applications. I would try this before doing a super complicated Encoder Decoder, as a valuable and simple baseline.
+
+5. Rolling window for Fourier Transform
+This is probably the most delicate application and the hardest one to explain in a few lines, so be gentle with me ❤️‍🩹.
+
+The idea of the Fourier Transform (FFT) is to decompose the signal in the sine and cosine components. This method transforms a time-domain signal into the frequency domain. FFT is used for multiple tasks like understanding the seasonal components of a signal, clean the signal from noise, or compressing audio or image data.
+
+Nonetheless, this method has two notorious problems:
+
+This method is meant to be applied to perfectly periodic signals. So if a signal is periodic, the FFT perfectly able to distinguish the components. In real life, most signals are not perfectly periodic and this method has some leakage.
+The FFT assumes that all frequency components exist every time (throughout the entire signal). But think about it, maybe sometimes you work out 3 times a week (before summer for example, we are all guilty) sometimes you work out once a week. Frequency, in real life, changes with time.
+Short Time Fourier Transform (STFT) is very helpful because it uses a rolling window to consider bits of the signal, impose the periodicity using a Hann Window (or similar) and allows you to consider the Fourier Transform at different time steps.
+
+The result of a STFT is an image that gives you, for every time and frequency the amplitude of the component.
+
+Let’s do an example; let’s consider a signal that has a frequency from step = 0 to step = 1000 and a much higher frequency from step = 1000 to step = 2000.
+
+Kind of like this:
+
+
+If we run the Short Time Fourier transform we can clearly see the time when the frequency changes.
+
+
+When you consider a signal with multiple components that can happen in different moments of your long signal, it is a good idea to see when the frequency changes with time.
+
+6. Conclusions
+Thank you very much for rolling with me throughout the article :) it means a lot to me ❤
+
+In this blogpost we did the following:
+
+We introduced the rolling window idea with me doing laundry. We talked about the idea of isolating a part of your signal, process it, and store the data.
+We used rolling windows to extract features. This can be used to prepare the signal before your Machine Learning algorithm.
+We showed how rolling windows to smooth a signal. In order to smooth a signal you can combine a rolling window with the polynomial fit approach. This is called Savitzky-Golay filter.
+We used rolling windows to detect the peak of a signal. We run throughout the signal and use the mean and standard deviation to detect positive and negative peaks. We did this with our own custom object.
+We applied rolling windows to detect when a certain frequency appears in a signal. This is a refinement of the Fourier Transform and can be used when the frequencies vary over time.
+7. About me!
+Thank you again for your time. It means a lot ❤
+
+My name is Piero Paialunga and I’m this guy here:
+
+
+Image made by author
+
+I am a Ph.D. candidate at the University of Cincinnati Aerospace Engineering Department and a Machine Learning Engineer for Gen Nine. I talk about AI, and Machine Learning in my blog posts and on Linkedin. If you liked the article and want to know more about machine learning and follow my studies you can:

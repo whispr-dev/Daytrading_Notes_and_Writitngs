@@ -1,0 +1,1114 @@
+Investment Asset Ranking/Classification with Class Performance, ML Clustering & Anomaly Detection
+Diversifying investment portfolios with asset ranking/classification analysis (viz. class annual performance, ML clustering & anomaly detection)
+Alexzap
+Alexzap
+
+·
+Follow
+
+22 min read
+·
+Sep 14, 2024
+64
+
+
+
+
+
+
+“The addition of the one-hundredth stock simply can’t reduce the potential variance in portfolio performance sufficiently to compensate for the negative effect its inclusion has on the overall portfolio expectation.” Warren Buffett
+
+A Sunburst Chart of Industry Sectors (courtesy of Renan Fioramonte)
+A Sunburst Chart of Industry Sectors (courtesy of Renan Fioramonte)
+The ultimate goal of the present study is to create a diversified investment portfolio using asset ranking/classification analysis.
+The core technologies include but are not limited to class annual performance [1], Machine Learning (ML) clustering and anomaly detection algorithms in Python.
+An ongoing challenge is a strategic portfolio diversification [2] aimed at reducing risk by allocating investments across various assets.
+In fact, with the right strategy, focus and diversification can successfully coexist in that each can increase the benefits the other brings to an investment.
+Methods
+To help generate a healthy blend of focus and diversification, it is a good practice to examine the asset class performance heatmap [1] in any given year. Assets at the top of this chart one year could be at the bottom the next, and vice versa. The chart shows annual returns and does not include fees and expenses.
+The S&P 500 Index serves as a suitable dataset for algorithmic K-Means clustering of 500 large-cap US companies based on return and volatility [3]. Indeed, the underlying algorithm meets the requirements of clustering based on distance information between stocks [4].
+It is well known that the K-Means algorithm does not account for temporal dependencies and the sequential nature of time series. To overcome this drawback, Hierarchical Clustering brings together the individual time series into clusters based on their Dynamic Time Warping (DTW) distances [5]. Recall that a hierarchical cluster analysis is a clustering method that creates a hierarchical tree or dendrogram of the objects to be clustered.
+ML can be used to detect anomalies in price behavior or price movements that are out of the ordinary [6, 7]. The objective is to optimize the portfolio using anomaly scores. By identifying outliers, we understand stock market trends better and potentially discover new investment opportunities, avoiding losses and preventing profits from eroding. Here, we will use the Isolation Forest algorithm [7] to detect anomalies of the META Returns.
+To determine whether a correlation between returns of different stocks is statistically significant, screening for cointegration is often used to do this. One powerful tool used to decipher correlations is the X-plot [8, 9]. X-plots (aka scatter plots) act as most basic visual representations of the relationship between different financial time series. In addition to the classical 2D case [9], we’ll demonstrate the power of 3D X-plots [8] to select up to three stocks which move similarly. In this example, our specific goal is to detect anomalous changes in the daily closing prices of various stocks [10].
+Most anomaly detection algorithms are based on an assumption that the majority of the data in the dataset are normal examples. Indeed, in unsupervised ML, any data that differs significantly from the normal behavior will be flagged as an anomaly. In this article, we’ll also discuss a less common (albeit not entirely unsuccessful) supervised ML approach by creating a Long Short-Term Memory Network (LSTM) model of the closing prices for S&P 500 from 1986 to 2018 [11].
+By taking the analogy with financial transactions, we’ll download the benchmark dataset that should be well suited to the task of robust anomaly detection. This dataset will be used to train the Isolated Forest ML model [12] and evaluate its performance.
+Libraries
+yfinance 0.2.43 Download market data from Yahoo! Finance API
+matplotlib 3.9.2 Python plotting package
+seaborn 0.13.2 Statistical data visualization
+pandas 2.2.2 Data structures for data analysis, time series, and statistics
+numpy 2.1.1 Fundamental package for array computing in Python
+math This module provides access to the mathematical functions defined by the C standard
+scikit-learn 1.5.2 A set of Python modules for ML and data mining
+scipy 1.14.1 Fundamental algorithms for scientific computing in Python
+plotly 5.24.1 An open-source, interactive data visualization library for Python
+fastdtw 0.3.4 DTW algorithm
+tensorflow 2.17.0 An open source ML framework
+Contents
+Annual Class Performance Heatmap
+Returns-Volatility Clustering of S&P 500 Stocks
+Hierarchical Clustering of Stocks
+META Return Anomaly Detection
+3D X-Plots of Tech Stocks with Anomaly Scores
+LSTM Anomaly Detection of S&P 500 Daily Prices
+Analogy with Anomalies in Transaction Amount
+Let’s delve into further details of the aforementioned topics.
+
+Prerequisites
+Python 3.12.6
+Install the classic Jupyter Notebook with:
+pip install notebook
+To run the notebook:
+jupyter notebook
+Installing Python Packages from a Jupyter Notebook
+!pip install <package>
+Annual Class Performance Heatmap
+Importing the necessary libraries and reading the stock Adj Close price
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import yfinance
+from matplotlib.patches import Rectangle
+
+sns.set()
+
+# declare the tickers
+# Create a list with the tickers to use.
+tickers = ['AAPL', 'NVDA', 'META', 'AMZN','SPY']
+
+# select the start and end dates
+start_date = '2021-12-31'
+end_date = '2023-12-31'
+
+# retrieve the prices, resample to yearly
+df_prices = yfinance.download(tickers, start_date, end_date)['Adj Close']
+Performing data resampling and calculating annual returns
+df_prices.index = pd.to_datetime(df_prices.index)
+df_prices = df_prices.resample('Y').last()
+
+# convert to returns
+df_returns = df_prices.pct_change().dropna()
+Creating a diversified portfolio and inspecting the final returns
+# create a diversified portfolio
+portfolio = (df_returns['SPY'].mul(0.4))+(df_returns['AAPL'].mul(0.1))+(df_returns['NVDA'].mul(0.3))+(df_returns['AMZN'].mul(0.1))+(df_returns['META'].mul(0.1))
+portfolio.name = 'Portfolio'
+
+# inspect the results
+print(portfolio)
+
+# add the balanced portfolio returns to the dataframe
+# multiply all decimal format returns by 100 and round to 2 decimals
+df_returns_final = pd.concat([df_returns, portfolio], axis=1).mul(100).round(2)
+
+# inspect the final returns dataframe
+print(df_returns_final)
+
+Date
+2022-12-31 00:00:00+00:00   -0.363737
+2023-12-31 00:00:00+00:00    1.145777
+Freq: A-DEC, Name: Portfolio, dtype: float64
+                            AAPL   AMZN    META   NVDA   SPY    Portfolio
+Date                                                                     
+2022-12-31 00:00:00+00:00 -26.40 -49.62  -64.22  -50.26 -18.18     -36.37
+2023-12-31 00:00:00+00:00  49.01  80.88  194.13  239.02  26.18     114.58
+Plotting the Class Performance by Calendar Year heatmap [1] with the default color palette
+# function for plotting
+def calendar_year_heatmap(df_returns):
+    """
+    Creates a heatmap showing the annual performance of various asset classes,
+    with each column representing a year and each cell showing the performance
+    of an asset class in that year. Asset classes are sorted by performance within
+    each column, with the highest returns at the top.
+
+    Parameters:
+    - df_returns: A pandas DataFrame with a DateTimeIndex representing dates and columns
+                  representing different asset classes. The values are the annual returns
+                  of the asset classes.
+
+    The function plots a heatmap where each cell's color is associated with its asset class,
+    and the cell is annotated with the asset class ticker and its annual return. Black borders
+    separate the cells.
+    """
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    # Extract just the year part from the DateTimeIndex to identify unique years
+    unique_years = df_returns.index.year.unique()
+    num_years = len(unique_years)
+
+    # Assign a unique color to each ticker for identification across the heatmap
+    tickers = df_returns.columns
+    color_map = {ticker: plt.cm.Pastel2(i % len(plt.cm.Pastel2.colors)) for i, ticker in enumerate(tickers)}
+
+    # Iterate through each year, creating a column in the heatmap for each
+    for i, year in enumerate(unique_years):
+        # Filter the DataFrame for the current year and transpose for easier sorting
+        df_year = df_returns[df_returns.index.year == year].T
+        # Sort the transposed DataFrame to have the highest returns at the top
+        df_year_sorted = df_year.sort_values(by=df_year.columns[0], ascending=False)
+
+        # Plot each ticker's return for the year, using the assigned color and adding a black border
+        for j, (ticker, row) in enumerate(df_year_sorted.iterrows()):
+            return_value = row.iloc[0]  # Extract the return value from the row
+            # Create a rectangle representing the asset class's annual return for a given year.
+            # The rectangle's position and size are determined by (i, j) for the bottom-left corner
+            # and width & height set to 1, ensuring each cell in the heatmap is uniform.
+            # 'facecolor=color_map[ticker]' assigns a unique color to each asset class based on the ticker,
+            # making it easy to identify across different years. 'edgecolor='black'' adds a distinct black border
+            # around each cell, enhancing the visual separation between different asset classes' returns.
+            rect = Rectangle((i, j), 1, 1, facecolor=color_map[ticker], edgecolor='black')
+            ax.add_patch(rect)
+            # Annotate the rectangle with the ticker and its return value
+            ax.text(i + 0.5, j + 0.5, f'{ticker}\n{return_value:.2f}%',
+                    va='center', ha='center', fontsize=8)
+
+    # Set up the axes, labels, and title
+    ax.set_xlim(0, num_years)
+    ax.set_ylim(0, len(tickers))
+    ax.set_xticks([i + 0.5 for i in range(num_years)])
+    ax.set_xticklabels(unique_years)
+    ax.set_xlabel('Years')
+    ax.set_yticks([])  # Remove y-axis tick marks
+    ax.set_yticklabels([])  # Clear y-axis tick labels
+    ax.set_title('Class Performance by Calendar Year')
+
+    plt.gca().invert_yaxis()  # Invert the y-axis to have the best returns at the top
+    plt.show()
+
+
+calendar_year_heatmap(df_returns_final)
+Class Performance by Calendar Year
+Class Performance by Calendar Year
+Returns-Volatility Clustering of S&P 500 Stocks
+Implementing the K-Means clustering algorithm applied to the S&P 500 Index [3].
+Importing the necessary Python libraries
+import numpy as np 
+import pandas as pd
+import pandas_datareader as dr
+import yfinance as yf
+
+from matplotlib import pyplot as plt
+import plotly.express as px
+
+from numpy.random import rand
+from scipy.cluster.vq import kmeans,vq
+from math import sqrt
+from sklearn.cluster import KMeans 
+from sklearn import preprocessing
+Reading in the Index URL and scraping the ticker data
+# Define the url
+sp500_url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+
+# Read in the url and scrape ticker data
+data_table = pd.read_html(sp500_url)
+tickers = data_table[0]['Symbol'].values.tolist()
+tickers = [s.replace('\n', '') for s in tickers]
+tickers = [s.replace('.', '-') for s in tickers]
+tickers = [s.replace(' ', '') for s in tickers]
+Using yfinance to download Adj Close price
+# Download prices
+prices_list = []
+for ticker in tickers:
+    try:
+        prices = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
+        prices = pd.DataFrame(prices)
+        prices.columns = [ticker]
+        prices_list.append(prices)
+    except:
+        pass
+    prices_df = pd.concat(prices_list,axis=1)
+prices_df.sort_index(inplace=True)
+Calculating returns and volatility
+
+# Create an empity dataframe
+returns = pd.DataFrame()
+
+# Define the column Returns
+returns['Returns'] = prices_df.pct_change().mean() * 252
+
+# Define the column Volatility
+returns['Volatility'] = prices_df.pct_change().std() * sqrt(252)
+Plotting the Elbow Curve
+# Format the data as a numpy array to feed into the K-Means algorithm
+data = np.asarray([np.asarray(returns['Returns']),np.asarray(returns['Volatility'])]).T
+X = data
+distorsions = []
+for k in range(2, 20):
+    k_means = KMeans(n_clusters=k)
+    k_means.fit(X)
+    distorsions.append(k_means.inertia_)
+fig = plt.figure(figsize=(15, 5))
+
+plt.plot(range(2, 20), distorsions,lw=4)
+plt.grid(True)
+plt.title('Elbow Curve',fontsize=22)
+Elbow Curve
+Elbow Curve
+Computing K-Means with K = 4 (4 clusters) and plotting the result with Plotly
+# Computing K-Means with K = 4 (4 clusters)
+centroids,_ = kmeans(data,4)
+
+# Assign each sample to a cluster
+idx,_ = vq(data,centroids)
+
+# Create a dataframe with the tickers and the clusters that's belong to
+details = [(name,cluster) for name, cluster in zip(returns.index,idx)]
+details_df = pd.DataFrame(details)
+
+# Rename columns
+details_df.columns = ['Ticker','Cluster']
+
+# Create another dataframe with the tickers and data from each stock
+clusters_df = returns.reset_index()
+
+# Bring the clusters information from the dataframe 'details_df'
+clusters_df['Cluster'] = details_df['Cluster']
+
+# Rename columns
+clusters_df.columns = ['Ticker', 'Returns', 'Volatility', 'Cluster']
+
+# Plot the clusters created using Plotly
+fig = px.scatter(clusters_df, x="Returns", y="Volatility", color="Cluster", text="Ticker",hover_data=["Ticker"])
+fig.update(layout_coloraxis_showscale=False)
+fig.update_traces(marker_size=10)
+fig.update_traces(textposition='top center')
+fig.show()
+Four S&P 500 K-Means clusters in the Returns-Volatility domain
+Four S&P 500 K-Means clusters in the Returns-Volatility domain
+Removing 10 outliers and plotting the result with Plotly
+# Identify and remove the outliers of stocks
+returns.drop('NVDA',inplace=True) #High Risk-Return
+returns.drop('TSLA',inplace=True) #High Risk-Return
+returns.drop('META',inplace=True) #High Risk-Return
+returns.drop('CTLT',inplace=True) #Highest Risk Low Positive Return
+returns.drop('ZION',inplace=True) #Highest Risk Middle Negative Return
+returns.drop('CMA',inplace=True) #Highest Risk Middle Negative Return
+returns.drop('DG',inplace=True)  #High Risk Negative Return
+returns.drop('ENPH',inplace=True) #High Risk Negative Return
+returns.drop('SEDG',inplace=True) #High Risk Large Negative Return
+returns.drop('VLTO',inplace=True) #High Risk Largest Negative Return
+
+
+# Recreate data to feed into the algorithm
+data = np.asarray([np.asarray(returns['Returns']),np.asarray(returns['Volatility'])]).T
+
+# Computing K-Means with K = 4 (4 clusters)
+centroids,_ = kmeans(data,4)
+
+# Assign each sample to a cluster
+idx,_ = vq(data,centroids)
+
+# Create a dataframe with the tickers and the clusters that's belong to
+details = [(name,cluster) for name, cluster in zip(returns.index,idx)]
+details_df = pd.DataFrame(details)
+
+# Rename columns
+details_df.columns = ['Ticker','Cluster']
+
+# Create another dataframe with the tickers and data from each stock
+clusters_df = returns.reset_index()
+
+# Bring the clusters information from the dataframe 'details_df'
+clusters_df['Cluster'] = details_df['Cluster']
+
+# Rename columns
+clusters_df.columns = ['Ticker', 'Returns', 'Volatility', 'Cluster']
+
+# Plot the clusters created using Plotly
+fig = px.scatter(clusters_df, x="Returns", y="Volatility", color="Cluster", text="Ticker",hover_data=["Ticker"])
+fig.update(layout_coloraxis_showscale=False)
+fig.update_traces(marker_size=10)
+fig.update_traces(textposition='top center')
+fig.show()
+Four S&P 500 K-Means clusters in the Returns-Volatility domain after removing 10 outliers
+Four S&P 500 K-Means clusters in the Returns-Volatility domain after removing 10 outliers
+Plotting K-Means Cluster 0 with subzero-to-middle negative Returns
+clusters1_df = clusters_df.loc[clusters_df['Cluster'] == 0]
+# Plot the clusters created using Plotly
+fig = px.scatter(clusters1_df, x="Returns", y="Volatility", text="Ticker",hover_data=["Ticker"])
+fig.update(layout_coloraxis_showscale=False)
+fig.update_traces(marker_size=10)
+fig.update_traces(textposition='top center')
+fig.update_traces(marker=dict(color='blue'))
+fig.update_layout(
+    height=800,
+    title_text='S&P500 Stock Cluster 0',font=dict(size=15)
+)
+fig.update_layout(
+yaxis = dict(
+tickfont = dict(size=20)))
+fig.update_layout(
+xaxis = dict(
+tickfont = dict(size=20)))
+fig.show()
+S&P500 Stock Cluster 0
+S&P500 Stock Cluster 0
+Plotting K-Means Cluster 1 with middle-to-large negative Returns
+clusters1_df = clusters_df.loc[clusters_df['Cluster'] == 1]
+# Plot the clusters created using Plotly
+fig = px.scatter(clusters1_df, x="Returns", y="Volatility", text="Ticker",hover_data=["Ticker"])
+fig.update(layout_coloraxis_showscale=False)
+fig.update_traces(marker_size=10)
+fig.update_traces(textposition='top center')
+fig.update_traces(marker=dict(color='purple'))
+fig.update_layout(
+    height=800,
+    title_text='S&P500 Stock Cluster 1',font=dict(size=15)
+)
+fig.update_layout(
+yaxis = dict(
+tickfont = dict(size=20)))
+fig.update_layout(
+xaxis = dict(
+tickfont = dict(size=20)))
+fig.show()
+S&P500 Stock Cluster 1
+S&P500 Stock Cluster 1
+Plotting K-Means Cluster 2 with subzero negative and subzero-to-middle positive Returns
+clusters1_df = clusters_df.loc[clusters_df['Cluster'] == 2]
+# Plot the clusters created using Plotly
+fig = px.scatter(clusters1_df, x="Returns", y="Volatility", text="Ticker",hover_data=["Ticker"])
+fig.update(layout_coloraxis_showscale=False)
+fig.update_traces(marker_size=10)
+fig.update_traces(textposition='top center')
+fig.update_traces(marker=dict(color='orange'))
+fig.update_layout(
+    height=800,
+    title_text='S&P500 Stock Cluster 2',font=dict(size=15)
+)
+fig.update_layout(
+yaxis = dict(
+tickfont = dict(size=20)))
+fig.update_layout(
+xaxis = dict(
+tickfont = dict(size=20)))
+fig.show()
+S&P500 Stock Cluster 2
+S&P500 Stock Cluster 2
+Plotting K-Means Cluster 3 with middle-to-large positive Returns
+clusters1_df = clusters_df.loc[clusters_df['Cluster'] == 3]
+# Plot the clusters created using Plotly
+fig = px.scatter(clusters1_df, x="Returns", y="Volatility", text="Ticker",hover_data=["Ticker"])
+fig.update(layout_coloraxis_showscale=False)
+fig.update_traces(marker_size=10)
+fig.update_traces(textposition='top center')
+fig.update_traces(marker=dict(color='yellow'))
+fig.update_layout(
+    height=800,
+    title_text='S&P500 Stock Cluster 3',font=dict(size=15)
+)
+fig.update_layout(
+yaxis = dict(
+tickfont = dict(size=20)))
+fig.update_layout(
+xaxis = dict(
+tickfont = dict(size=20)))
+fig.show()
+S&P500 Stock Cluster 3
+S&P500 Stock Cluster 3
+Hierarchical Clustering of Stocks
+Demonstrating the DTW-based Hierarchical Clustering algorithm [5].
+Importing the necessary libraries and reading the input stock data
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from fastdtw import fastdtw
+import matplotlib.pyplot as plt
+from scipy.spatial.distance import euclidean
+from scipy.cluster.hierarchy import dendrogram, linkage
+
+stocks = [
+    'AAPL',  # Apple
+    'JNJ',   # Johnson & Johnson
+    'XOM',   # Exxon Mobil
+    'HSBC',  # HSBC
+    'BABA',  # Alibaba
+    'TSLA',  # Tesla
+    'KO',    # Coca-Cola
+    'SAP',   # SAP
+    'NVDA',  # NVIDIA
+    'WMT'    # Walmart
+]
+
+start_date = '2023-01-01'
+end_date = '2024-05-28'
+
+closing_prices = pd.DataFrame()
+
+for stock in stocks:
+    ticker = yf.Ticker(stock)
+    hist = ticker.history(start=start_date, end=end_date)
+    closing_prices[stock] = hist['Close']
+Calculating and plotting the normalized Close prices
+normalized_data = closing_prices / closing_prices.iloc[0]
+normalized_data.dropna(axis=1, inplace=True)
+
+normalized_data.plot()
+Normalized Close prices of 10 selected stocks
+Normalized Close prices of 10 selected stocks
+Computing and plotting Hierarchical Clustering of Stocks with DTW
+def euclidean(x, y):
+    return np.sqrt(np.sum((x - y) ** 2))
+
+dtw_distances = np.zeros((len(normalized_data.columns), len(normalized_data.columns)))
+
+for i, stock_i in enumerate(normalized_data.columns):
+    for j, stock_j in enumerate(normalized_data.columns):
+        if i < j:
+            series_i = normalized_data[stock_i].values.flatten()
+            series_j = normalized_data[stock_j].values.flatten()
+            distance, path = fastdtw(series_i, series_j, dist=euclidean)
+            dtw_distances[i, j] = distance
+            dtw_distances[j, i] = distance
+
+Z = linkage(dtw_distances, 'ward')
+
+plt.figure(figsize=(10, 6))
+dendrogram(Z, labels=normalized_data.columns, leaf_rotation=45., leaf_font_size=12.,
+                    above_threshold_color='#1500fc', color_threshold=0.3 * max(Z[:, 2]),  
+                    )
+plt.title('Hierarchical Clustering of Stocks with DTW')
+plt.xlabel('Stock')
+plt.ylabel('Distance')
+plt.tight_layout()
+plt.show()
+Hierarchical Clustering of 10 Selected Stocks with DTW
+Hierarchical Clustering of 10 Selected Stocks with DTW
+This plot represents a hierarchical tree or dendrogram of the stocks to be clustered.
+Visualization of the clusters using the dendrogram reveals the inherent relationships within the portfolio.
+META Return Anomaly Detection
+Using the Isolation Forest algorithm [7] to detect anomalies of the META Returns in 2023.
+Reading the input stock data
+import yfinance as yf
+import pandas as pd
+
+ticker = 'META'  
+start_date = '2023-01-01'
+end_date = '2023-10-30'
+
+stock_data = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
+Preparing the input data for anomaly detection
+# Create an empity dataframe
+returns = pd.DataFrame()
+
+# Define the column Returns
+returns['Returns'] = stock_data.pct_change()
+
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+returns['Returns'] = scaler.fit_transform(returns['Returns'].values.reshape(-1,1))
+data=returns.dropna()
+data.tail()
+
+           Returns
+Date 
+2023-10-23 0.478265
+2023-10-24 -0.343518
+2023-10-25 -1.724914
+2023-10-26 -1.563206
+2023-10-27 0.914842
+Using Isolation Forest with 5% contamination to detect anomalously high and low daily returns
+from sklearn.ensemble import IsolationForest
+model = IsolationForest(contamination=0.05)
+model.fit(data[['Returns']])
+
+# Predicting anomalies
+data['Anomaly'] = model.predict(data[['Returns']])
+data['Anomaly'] = data['Anomaly'].map({1: 0, -1: 1})
+
+# Ploting the results
+plt.figure(figsize=(20,5))
+plt.plot(data.index, data['Returns'], label='Returns')
+plt.scatter(data[data['Anomaly'] == 1].index, data[data['Anomaly'] == 1]['Returns'], color='red')
+plt.legend(['Returns', 'Anomaly'])
+
+SMALL_SIZE = 18
+MEDIUM_SIZE = 18
+BIGGER_SIZE = 18
+
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+plt.grid()
+plt.show()
+Detected Anomalies of META Daily Returns
+Detected Anomalies of META Daily Returns
+The above plot creates a good definition of what normal META Return behavior looks like.
+3D X-Plots of Tech Stocks with Anomaly Scores
+In this section, we’ll create the 3D cross plots [8] to understand the relationship between returns of three tech stocks of interest.
+In this example, our specific goal is to detect anomalous changes in the daily closing prices of various stocks [10].
+Loading the input stock data
+import numpy as np
+import pandas as pd
+import yfinance as yf
+
+start_date = '2023-01-01'
+end_date = '2023-10-30'
+
+fb = yf.Ticker("META")
+
+fb_historical = fb.history(start=start_date, end=end_date, interval="1d")
+fb_df = fb_historical.drop(columns=['Open', 'High', 'Low', 'Dividends', 'Stock Splits', 'Volume'])
+fb_df.rename(columns= {'Close':'META'}, inplace=True)
+
+tsla= yf.Ticker("TSLA")
+
+tsla_historical = tsla.history(start=start_date, end=end_date, interval="1d")
+tsla_df = tsla_historical.drop(columns=['Open', 'High', 'Low', 'Dividends', 'Stock Splits', 'Volume'])
+tsla_df.rename(columns= {'Close':'TSLA'}, inplace=True)
+
+cmg = yf.Ticker("AAPL")
+
+cmg_historical = cmg.history(start=start_date, end=end_date, interval="1d")
+cmg_df = cmg_historical.drop(columns=['Open', 'High', 'Low', 'Dividends', 'Stock Splits', 'Volume'])
+cmg_df.rename(columns= {'Close':'AAPL'}, inplace=True)
+Preparing the above datasets for 3D visualization of stock returns by computing the percentage of changes in the daily closing price of each stock [10]
+# Concat join tickers into one DataFrame
+
+stocks = pd.concat([fb_df, tsla_df, cmg_df], axis="columns", join="inner")
+
+N,d = stocks.shape
+delta = pd.DataFrame(100*np.divide(stocks.iloc[1:,:].values-stocks.iloc[:N-1,:].values, stocks.iloc[:N-1,:].values),
+                    columns=stocks.columns, index=stocks.iloc[1:].index)
+delta.tail()
+
+                          META     TSLA      AAPL
+Date   
+2023-10-23 00:00:00-04:00 1.736600 0.042453 0.069409
+2023-10-24 00:00:00-04:00 -0.464960 2.093551 0.254337
+2023-10-25 00:00:00-04:00 -4.165730 -1.893592 -1.349168
+2023-10-26 00:00:00-04:00 -3.732512 -3.135300 -2.460553
+2023-10-27 00:00:00-04:00 2.906192 0.748449 0.796933
+Creating the 3D scatter plot of stock returns in matplotlib
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+fig = plt.figure(figsize=(8,5))
+ax = plt.axes(projection='3d')
+ax.scatter(delta.META,delta.TSLA,delta.AAPL)
+ax.set_xlabel('META',labelpad = 15)
+ax.set_ylabel('TSLA',labelpad = 15)
+ax.set_zlabel('AAPL',labelpad = -35)
+plt.show()
+3D scatter plot of stock returns: META, TSLA & AAPL.
+3D scatter plot of stock returns: META, TSLA & AAPL.
+Notice the highest level of cointegration between META & TSLA and a few outliers.
+Let’s dive into the 3D anomaly detection algorithm [10] by computing the mean and covariance matrix of the 3D data
+meanValue = delta.mean()
+covValue = delta.cov()
+print(meanValue)
+print(covValue)
+
+META    0.491357
+TSLA    0.393428
+AAPL    0.171355
+dtype: float64
+          META       TSLA      AAPL
+META  7.126712   3.642370  1.879189
+TSLA  3.642370  11.984574  2.070569
+AAPL  1.879189   2.070569  1.713684
+To determine the anomalous trading days, we can compute the Mahalanobis distance [10] between the percentage of price change on each day against the mean percentage of price change
+from numpy.linalg import inv
+
+X = delta.values
+S = covValue.values
+for i in range(3):
+    X[:,i] = X[:,i] - meanValue[i]
+    
+def mahalanobis(row):
+    return np.matmul(row,S).dot(row)   
+    
+anomaly_score = np.apply_along_axis( mahalanobis, axis=1, arr=X)
+
+fig = plt.figure(figsize=(10,6))
+ax = fig.add_subplot(111, projection='3d')
+p = ax.scatter(delta.META,delta.TSLA,delta.AAPL,c=anomaly_score,cmap='jet')
+ax.set_xlabel('META',labelpad = 15)
+ax.set_ylabel('TSLA',labelpad = 15)
+ax.set_zlabel('AAPL',labelpad = -35)
+fig.colorbar(p)
+plt.show()
+3D scatter plot of stock returns colored by the Mahalanobis distance.
+3D scatter plot of stock returns colored by the Mahalanobis distance.
+The top anomaly (outlier) is shown as a brown point in the figure above. This anomaly corresponds to the day in which the stock prices change significantly.
+Examining the dates associated with the highest anomaly scores
+anom = pd.DataFrame(anomaly_score, index=delta.index, columns=['Anomaly score'])
+result = pd.concat((delta,anom), axis=1)
+result.nlargest(2,'Anomaly score')
+
+                          META      TSLA     AAPL    Anomaly score
+Date    
+2023-02-02 00:00:00-05:00 22.791043 3.388061 3.534912 4775.720613
+2023-04-27 00:00:00-04:00 13.434147 3.795191 2.668175 2019.087741
+Comparing these findings against the Euclidean distance-based KNN approach with k=4 to identify the anomalous trading days [10]
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+from scipy.spatial import distance
+
+knn = 4
+nbrs = NearestNeighbors(n_neighbors=knn, metric=distance.euclidean).fit(delta.values)
+distances, indices = nbrs.kneighbors(delta.values)
+
+anomaly_score = distances[:,knn-1]
+
+fig = plt.figure(figsize=(10,6))
+ax = fig.add_subplot(111, projection='3d')
+p = ax.scatter(delta.META,delta.TSLA,delta.AAPL,c=anomaly_score,cmap='jet')
+ax.set_xlabel('META',labelpad = 15)
+ax.set_ylabel('TSLA',labelpad = 15)
+ax.set_zlabel('AAPL',labelpad = -35)
+fig.colorbar(p)
+plt.show()
+3D scatter plot of stock returns colored by the Euclidean distance.
+3D scatter plot of stock returns colored by the Euclidean distance.
+Observe a consistency between the two anomaly detection algorithms based on the Euclidean/Mahalanobis distance.
+In future, we’ll use both algorithms for QC purposes.
+LSTM Anomaly Detection of S&P 500 Daily Prices
+Evaluating the threshold-based LSTM anomaly detection algorithm [11] tested on the closing prices for S&P 500 from 1986 to 2018.
+Importing the necessary Python libraries and reading the input data
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+import pandas as pd
+import seaborn as sns
+from pylab import rcParams
+import matplotlib.pyplot as plt
+from matplotlib import rc
+from pandas.plotting import register_matplotlib_converters
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+rcParams['figure.figsize'] = 22, 10
+
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
+tf.random.set_seed(RANDOM_SEED)
+
+df = pd.read_csv('S&P_500_Index_Data.csv', parse_dates=['date'])
+anomaly_df = df.copy()
+
+fig = plt.figure(figsize=(10,6))
+plt.style.use('ggplot')
+
+ax = fig.add_subplot()
+
+ax.plot(anomaly_df['date'],anomaly_df['close'], label='Close Price')
+
+ax.set_title('S&P 500 Daily Prices 1986 - 2018', fontweight = 'bold')
+
+plt.rcParams.update({'font.size': 20})
+
+ax.set_xlabel('Year')
+ax.set_ylabel('Dollars ($)')
+
+ax.legend()
+S&P 500 Daily Prices 1986–2018
+S&P 500 Daily Prices 1986–2018
+Preparing the input data for the LSTM model building
+train_size = int(len(anomaly_df) * 0.7)
+test_size = len(anomaly_df) - train_size
+train, test = anomaly_df.iloc[0:train_size], anomaly_df.iloc[train_size:len(anomaly_df)]
+
+scaler = StandardScaler()
+scaler = scaler.fit(train[['close']])
+
+train['close'] = scaler.transform(train[['close']])
+test['close'] = scaler.transform(test[['close']])
+
+#Create helper function
+def create_dataset(X, y, time_steps=1):
+    Xs, ys = [], []
+    for i in range(len(X) - time_steps):
+        v = X.iloc[i:(i + time_steps)].values
+        Xs.append(v)        
+        ys.append(y.iloc[i + time_steps])
+    return np.array(Xs), np.array(ys)
+    
+TIME_STEPS = 30
+
+# reshape to [samples, time_steps, n_features]
+
+X_train, y_train = create_dataset(train[['close']], train.close, TIME_STEPS)
+X_test, y_test = create_dataset(test[['close']], test.close, TIME_STEPS)
+The LSTM model building (Keras Sequential NN compiling and fitting)
+model = keras.Sequential()
+
+#encoder
+model.add(keras.layers.LSTM(
+    units=64, 
+    input_shape=(X_train.shape[1], X_train.shape[2])
+))
+model.add(keras.layers.Dropout(rate=0.2))
+
+#decoder
+model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
+
+model.add(keras.layers.LSTM(units=64, return_sequences=True))
+model.add(keras.layers.Dropout(rate=0.2))
+
+model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
+
+model.compile(loss='mae', optimizer='adam')
+model.summary()
+
+Model: "sequential_2"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ lstm_4 (LSTM)               (None, 64)                16896     
+                                                                 
+ dropout_4 (Dropout)         (None, 64)                0         
+                                                                 
+ repeat_vector_2 (RepeatVect  (None, 30, 64)           0         
+ or)                                                             
+                                                                 
+ lstm_5 (LSTM)               (None, 30, 64)            33024     
+                                                                 
+ dropout_5 (Dropout)         (None, 30, 64)            0         
+                                                                 
+ time_distributed_2 (TimeDis  (None, 30, 1)            65        
+ tributed)                                                       
+                                                                 
+=================================================================
+Total params: 49,985
+Trainable params: 49,985
+Non-trainable params: 0
+
+history = model.fit(
+    X_train, y_train,
+    epochs=15,
+    batch_size=64,
+    validation_split=0.3,
+    shuffle=False
+)
+
+Epoch 1/15
+63/63 [==============================] - 4s 37ms/step - loss: 0.2712 - val_loss: 0.2323
+Epoch 2/15
+63/63 [==============================] - 2s 29ms/step - loss: 0.2078 - val_loss: 0.1583
+Epoch 3/15
+63/63 [==============================] - 2s 29ms/step - loss: 0.1857 - val_loss: 0.3003
+Epoch 4/15
+63/63 [==============================] - 2s 29ms/step - loss: 0.1564 - val_loss: 0.2170
+Epoch 5/15
+63/63 [==============================] - 2s 29ms/step - loss: 0.1526 - val_loss: 0.2304
+Epoch 6/15
+63/63 [==============================] - 2s 30ms/step - loss: 0.1306 - val_loss: 0.1914
+Epoch 7/15
+63/63 [==============================] - 2s 32ms/step - loss: 0.1332 - val_loss: 0.2261
+Epoch 8/15
+63/63 [==============================] - 2s 33ms/step - loss: 0.1318 - val_loss: 0.1897
+Epoch 9/15
+63/63 [==============================] - 2s 32ms/step - loss: 0.1140 - val_loss: 0.1551
+Epoch 10/15
+63/63 [==============================] - 2s 31ms/step - loss: 0.1328 - val_loss: 0.1768
+Epoch 11/15
+63/63 [==============================] - 2s 30ms/step - loss: 0.1172 - val_loss: 0.1632
+Epoch 12/15
+63/63 [==============================] - 2s 30ms/step - loss: 0.1159 - val_loss: 0.1429
+Epoch 13/15
+63/63 [==============================] - 2s 30ms/step - loss: 0.1186 - val_loss: 0.1272
+Epoch 14/15
+63/63 [==============================] - 2s 38ms/step - loss: 0.1145 - val_loss: 0.1188
+Epoch 15/15
+63/63 [==============================] - 3s 40ms/step - loss: 0.1110 - val_loss: 0.1082
+Plotting Loss vs Epochs for both train and test sets
+fig = plt.figure(figsize=(10,6))
+ax = fig.add_subplot()
+import matplotlib
+
+SMALL_SIZE = 18
+MEDIUM_SIZE = 18
+BIGGER_SIZE = 18
+
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+ax.plot(history.history['loss'], label='train',lw=4)
+ax.plot(history.history['val_loss'], label='test',lw=4)
+plt.xlabel('Epoch')
+ax.legend()
+Loss vs Epochs for both train and test sets
+Loss vs Epochs for both train and test sets
+Making train set predictions and plotting the train MAE loss histogram
+X_train_pred = model.predict(X_train)
+
+train_mae_loss = np.mean(np.abs(X_train_pred - X_train), axis=1)
+
+fig = plt.figure(figsize=(10,5))
+sns.set(style="darkgrid")
+
+ax = fig.add_subplot()
+sns.set(font_scale=2)
+sns.distplot(train_mae_loss, bins=50, kde=True)
+
+ax.set_title('Loss Distribution Training Set ', fontweight ='bold')
+Train MAE loss histogram
+Train MAE loss histogram
+Making test set predictions and plotting the test MAE loss histogram
+X_test_pred = model.predict(X_test)
+
+test_mae_loss = np.mean(np.abs(X_test_pred - X_test), axis=1)
+
+fig = plt.figure(figsize=(10,5))
+sns.set(style="darkgrid")
+
+ax = fig.add_subplot()
+sns.set(font_scale=2)
+sns.distplot(test_mae_loss, bins=50, kde=True)
+
+ax.set_title('Loss Distribution Test Set ', fontweight ='bold')
+Test MAE loss histogram
+Test MAE loss histogram
+The above plot can be used to define an optimal threshold value
+THRESHOLD = 0.55
+test_score_df = pd.DataFrame(index=test[TIME_STEPS:].index)
+test_score_df['date'] = test['date']
+test_score_df['loss'] = test_mae_loss
+test_score_df['threshold'] = THRESHOLD
+test_score_df['anomaly'] = test_score_df.loss > test_score_df.threshold
+test_score_df['close'] = test[TIME_STEPS:].close
+
+fig = plt.figure(figsize=(10,5))
+ax = fig.add_subplot()
+
+ax.plot(test_score_df.index, test_score_df.loss, label='loss')
+ax.plot(test_score_df.index, test_score_df.threshold, label='threshold')
+
+ax.legend()
+
+anomalies = test_score_df[test_score_df.anomaly == True]
+anomalies.index=test_score_df[test_score_df.anomaly == True].index
+anomalies.tail()
+
+date            loss threshold anomaly close
+8187 2018-06-25 1.767688 0.55 True 4.453261
+8188 2018-06-26 1.772058 0.55 True 4.467213
+8189 2018-06-27 1.774820 0.55 True 4.412640
+8190 2018-06-28 1.779076 0.55 True 4.451491
+8191 2018-06-29 1.780481 0.55 True 4.456289
+Test set loss & threshold vs time index
+Test set loss & threshold vs time index
+Plotting the price anomalies colored by the loss value after thresholding
+fig = plt.figure(figsize=(14,5))
+plt.plot(test['date'],test['close'])
+sns.scatterplot(data=anomalies, x="date", y="close", hue="loss",s=170)
+S&P 500 close price colored by the loss value after thresholding (for test set only).
+S&P 500 close price colored by the loss value after thresholding (for test set only).
+This price anomaly detection approach can be used to identify significant peaks (swing highs) and troughs (swing lows) on a price chart and draw horizontal lines connecting them. These lines act as reference levels, indicating potential areas of support and resistance.
+Analogy with Anomalies in Transaction Amount
+Using the financial transactions data to train the Isolated Forest ML model [12] and evaluate its performance.
+Importing libraries and reading the input dataset
+import pandas as pd
+import plotly.express as px
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import IsolationForest
+from sklearn.metrics import classification_report
+
+data = pd.read_csv("transaction_anomalies_dataset.csv")
+print(data.head())
+
+  Transaction_ID  Transaction_Amount  Transaction_Volume  \
+0            TX0         1024.835708                   3   
+1            TX1         1013.952065                   4   
+2            TX2          970.956093                   1   
+3            TX3         1040.822254                   2   
+4            TX4          998.777241                   1   
+
+   Average_Transaction_Amount  Frequency_of_Transactions  \
+0                  997.234714                         12   
+1                 1020.210306                          7   
+2                  989.496604                          5   
+3                  969.522480                         16   
+4                 1007.111026                          7   
+
+   Time_Since_Last_Transaction Day_of_Week Time_of_Day  Age  Gender   Income  \
+0                           29      Friday       06:00   36    Male  1436074   
+1                           22      Friday       01:00   41  Female   627069   
+2                           12     Tuesday       21:00   61    Male   786232   
+3                           28      Sunday       14:00   61    Male   619030   
+4                            7      Friday       08:00   56  Female   649457   
+
+  Account_Type  
+0      Savings  
+1      Savings  
+2      Savings  
+3      Savings  
+4      Savings
+
+print(data.info())
+
+RangeIndex: 1000 entries, 0 to 999
+Data columns (total 12 columns):
+ #   Column                       Non-Null Count  Dtype  
+---  ------                       --------------  -----  
+ 0   Transaction_ID               1000 non-null   object 
+ 1   Transaction_Amount           1000 non-null   float64
+ 2   Transaction_Volume           1000 non-null   int64  
+ 3   Average_Transaction_Amount   1000 non-null   float64
+ 4   Frequency_of_Transactions    1000 non-null   int64  
+ 5   Time_Since_Last_Transaction  1000 non-null   int64  
+ 6   Day_of_Week                  1000 non-null   object 
+ 7   Time_of_Day                  1000 non-null   object 
+ 8   Age                          1000 non-null   int64  
+ 9   Gender                       1000 non-null   object 
+ 10  Income                       1000 non-null   int64  
+ 11  Account_Type                 1000 non-null   object 
+dtypes: float64(2), int64(5), object(5)
+memory usage: 93.9+ KB
+
+Calculating mean and STD of Transaction Amount
+# Calculate mean and standard deviation of Transaction Amount
+mean_amount = data['Transaction_Amount'].mean()
+std_amount = data['Transaction_Amount'].std()
+Defining the anomaly threshold as 2*STD deviations from the mean
+# Calculate mean and standard deviation of Transaction Amount
+mean_amount = data['Transaction_Amount'].mean()
+std_amount = data['Transaction_Amount'].std()
+
+# Define the anomaly threshold (2 standard deviations from the mean)
+anomaly_threshold = mean_amount + 2 * std_amount
+
+# Flag anomalies
+data['Is_Anomaly'] = data['Transaction_Amount'] > anomaly_threshold
+
+# Scatter plot of Transaction Amount with anomalies highlighted
+fig_anomalies = px.scatter(data, x='Transaction_Amount', y='Average_Transaction_Amount',
+                           color='Is_Anomaly', title='Anomalies in Transaction Amount')
+fig_anomalies.update_traces(marker=dict(size=12), 
+                            selector=dict(mode='markers', marker_size=1))
+fig_anomalies.show()
+Anomalies in Transaction Amount
+Anomalies in Transaction Amount
+Calculating the anomaly ratio
+# Calculate the number of anomalies
+num_anomalies = data['Is_Anomaly'].sum()
+
+# Calculate the total number of instances in the dataset
+total_instances = data.shape[0]
+
+# Calculate the ratio of anomalies
+anomaly_ratio = num_anomalies / total_instances
+print(anomaly_ratio)
+
+0.02
+Preparing the data for ML model building
+relevant_features = ['Transaction_Amount',
+                     'Average_Transaction_Amount',
+                     'Frequency_of_Transactions']
+
+# Split data into features (X) and target variable (y)
+X = data[relevant_features]
+y = data['Is_Anomaly']
+
+# Split data into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+Training the Isolation Forest ML model with 2% contamination
+# Train the Isolation Forest model
+model = IsolationForest(contamination=0.02, random_state=42)
+model.fit(X_train)
+Predicting transaction anomalies on the test set and evaluating the model performance
+# Predict anomalies on the test set
+y_pred = model.predict(X_test)
+
+# Convert predictions to binary values (0: normal, 1: anomaly)
+y_pred_binary = [1 if pred == -1 else 0 for pred in y_pred]
+
+# Evaluate the model performance
+report = classification_report(y_test, y_pred_binary, target_names=['Normal', 'Anomaly'])
+print(report)
+
+              precision    recall  f1-score   support
+
+      Normal       1.00      1.00      1.00       196
+     Anomaly       1.00      1.00      1.00         4
+
+    accuracy                           1.00       200
+   macro avg       1.00      1.00      1.00       200
+weighted avg       1.00      1.00      1.00       200
+Random check of the user’s input
+# Relevant features used during training
+relevant_features = ['Transaction_Amount', 'Average_Transaction_Amount', 'Frequency_of_Transactions']
+
+# Get user inputs for features
+user_inputs = []
+for feature in relevant_features:
+    user_input = float(input(f"Enter the value for '{feature}': "))
+    user_inputs.append(user_input)
+
+# Create a DataFrame from user inputs
+user_df = pd.DataFrame([user_inputs], columns=relevant_features)
+
+# Predict anomalies using the model
+user_anomaly_pred = model.predict(user_df)
+
+# Convert the prediction to binary value (0: normal, 1: anomaly)
+user_anomaly_pred_binary = 1 if user_anomaly_pred == -1 else 0
+
+if user_anomaly_pred_binary == 1:
+    print("Anomaly detected: This transaction is flagged as an anomaly.")
+else:
+    print("No anomaly detected: This transaction is normal.")
+
+Enter the value for 'Transaction_Amount': 2000
+Enter the value for 'Average_Transaction_Amount': 2300
+Enter the value for 'Frequency_of_Transactions': 10
+Anomaly detected: This transaction is flagged as an anomaly.
+Takeaways
+In this post, we have shown how asset ranking/classification strategies can help generate a healthy blend of focus and diversification of investment portfolios.
+The core technologies include but are not limited to class annual performance, supervised/unsupervised ML clustering and anomaly detection algorithms in Python.
+Main technical highlights or project deliverables are summarized as follows:
+Examined the Asset Class Performance by Calendar Year (heatmap)
+Implemented and tested the K-Means returns-volatility clustering of all S&P 500 stocks
+Evaluated the DTW-based hierarchical clustering of 10 selected stocks (dendrogram)
+The Isolation Forest algorithm detected time-series anomalies of the META Returns.
+The matplotlib 3D X-plots unveil the relationship between returns of three tech stocks of interest
+Observed a consistency between the two anomaly detection algorithms based on the Euclidean and Mahalanobis distance metrics.
+Evaluated the threshold-based LSTM anomaly detection algorithm using the closing prices for S&P 500
+Trained the Isolated Forest ML model and evaluated its performance by means of the analogy with financial transactions.
+The Road Ahead
+In future work, we plan to investigate the effectiveness of our proposed methodology on a larger and more diverse set of investment portfolios.
+We also plan to explore the use of other ML stock classification to be integrated with stochastic portfolio optimization techniques.
+Explore More
+Semi-Automated Detection of BTC-USD Price Support & Resistance Levels: Comparing 15 Essential Methods
+Using Supervised Machine Learning Algorithms to Predict Pricing Trends & Reversals: In-Sample vs Out-of-Sample AMD Stock Prices
+Risk/Return EDA of Diversified Stocks vs S&P 500 Benchmark in Python
+Time Series Data Imputation, Interpolation & Anomaly Detection
+Anomaly Detection using the Isolation Forest Algorithm
+Real-Time Anomaly Detection of NAB Ambient Temperature Readings using the TensorFlow/Keras Autoencoder
+References
+How to Create the Investment Diversification Heat Map in Python
+Portfolio Diversification: An Ongoing Objective
+Stock classification using k-means clustering
+Construction of stock portfolios based on k-means clustering of continuous trend features
+Understanding Time Series Clustering: Hands-On Hierarchical Clustering and Dynamic Time Warping (DTW)
+A Novel Anomaly Detection Approach for Nifty Stocks using Machine Learning for Construction of Efficient Portfolio to Reduce Losses and Protect Gains
+Anomaly Detection on Google Stock Data 2014–2022
+Three-Dimensional Plotting in Matplotlib
+Chapter 4. Visualization with Matplotlib
+Module 9: Anomaly Detection
+Anomaly Detection In Machine Learning
+Anomaly Detection in Transactions using Python
+Contacts
+Website
+GitHub
+Facebook
+X/Twitter
+Pinterest
+Mastodon
+Tumblr
+Disclaimer
+The following disclaimer clarifies that the information provided in this article is for educational use only and should not be considered financial or investment advice.
+The information provided does not take into account your individual financial situation, objectives, or risk tolerance.
+Any investment decisions or actions you undertake are solely your responsibility.
+You should independently evaluate the suitability of any investment based on your financial objectives, risk tolerance, and investment timeframe.
+It is recommended to seek advice from a certified financial professional who can provide personalized guidance tailored to your specific needs.
+The tools, data, content, and information offered are impersonal and not customized to meet the investment needs of any individual. As such, the tools, data, content, and information are provided solely for informational and educational purposes only.

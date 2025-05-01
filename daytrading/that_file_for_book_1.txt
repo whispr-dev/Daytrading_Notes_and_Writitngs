@@ -1,0 +1,83 @@
+import os
+
+# Define the book structure as a dictionary to store contents
+book_contents = {
+    "Introduction": "",
+    "Chapter 1: Foundations of Algorithmic Trading": "",
+    "Chapter 2: Trading Strategies & Technical Indicators": "",
+    "Chapter 3: Machine Learning for Stock Market Prediction": "",
+    "Chapter 4: Data Pipelines and Automation": "",
+    "Chapter 5: Advanced Financial Analysis with Python": "",
+    "Chapter 6: Risk Management & Optimization Techniques": "",
+    "Chapter 7: Integrating AI/ML in Trading Systems": "",
+    "Chapter 8: Real-Time Trading Systems & Strategies": "",
+    "Chapter 9: Python Notebooks & Implementation Details": "",
+    "Appendices": ""
+}
+
+# Directory containing the files
+file_dir = "/mnt/data/"
+
+# Map each document to a chapter based on observed patterns in naming or content
+file_mapping = {
+    'daytrading OCR.pdf': "Chapter 1: Foundations of Algorithmic Trading",
+    'Copy of LSTM&EMA3-0.ipynb': "Chapter 3: Machine Learning for Stock Market Prediction",
+    'datapipeline_00.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipeline_01.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipeline_02.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipeline_03.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipeline_4.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipeline_5.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipeline_7.txt': "Chapter 4: Data Pipelines and Automation",
+    'datapipelne_6.txt': "Chapter 4: Data Pipelines and Automation",
+    'daytrading_00.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_0.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_01.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_1.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_1a.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_02.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_2.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_2a.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_03.txt': "Chapter 2: Trading Strategies & Technical Indicators",
+    'daytrading_04.txt': "Chapter 5: Advanced Financial Analysis with Python",
+    'daytrading_05.txt': "Chapter 5: Advanced Financial Analysis with Python",
+    'daytrading_06.txt': "Chapter 6: Risk Management & Optimization Techniques",
+    'daytrading_07.txt': "Chapter 6: Risk Management & Optimization Techniques",
+    'daytrading_08.txt': "Chapter 6: Risk Management & Optimization Techniques",
+    'daytrading_09.txt': "Chapter 7: Integrating AI/ML in Trading Systems",
+    'daytrading_10.txt': "Chapter 7: Integrating AI/ML in Trading Systems",
+    'daytrading_11.txt': "Chapter 7: Integrating AI/ML in Trading Systems",
+    'daytrading_12.txt': "Chapter 7: Integrating AI/ML in Trading Systems",
+    'daytrading_13.txt': "Chapter 7: Integrating AI/ML in Trading Systems",
+    'daytrading_14.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_15.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_16.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_17.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_18.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_19.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_20.txt': "Chapter 8: Real-Time Trading Systems & Strategies",
+    'daytrading_22.txt': "Chapter 9: Python Notebooks & Implementation Details"
+}
+
+# Consolidate content into book chapters
+for filename in os.listdir(file_dir):
+    if filename in file_mapping:
+        file_path = os.path.join(file_dir, filename)
+        with open(file_path, 'r', errors='ignore') as file:
+            content = file.read()
+            chapter = file_mapping[filename]
+            book_contents[chapter] += f"\n\n### {filename}\n\n" + content
+
+# Create the final Markdown file
+book_content_md = "# Advanced Strategies in Trading, Machine Learning, and Financial Analysis\n\n"
+
+# Append each chapter to the final markdown content
+for chapter, content in book_contents.items():
+    book_content_md += f"## {chapter}\n\n{content}\n\n"
+
+# Save the final book in Markdown format
+output_file = "/mnt/data/Complete_Trading_Book.md"
+with open(output_file, 'w') as md_file:
+    md_file.write(book_content_md)
+
+output_file

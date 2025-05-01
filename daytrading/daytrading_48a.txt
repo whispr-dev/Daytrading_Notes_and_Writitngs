@@ -1,0 +1,184 @@
+Explain Any Machine Learning Model in Python, SHAP
+A Comprehensive Guide to SHAP and Shapley Value; Explainable machine learning with a single function call
+Maria Gusarova
+Maria Gusarova
+
+·
+Follow
+
+9 min read
+·
+Sep 22, 2022
+440
+
+
+3
+
+
+
+
+
+This article is part of a series where we walk step by step through solving fintech problems with different Machine Learning techniques using the “All lending club loan” dataset. Here you can find the complete end-to-end data science project for beginners to learn data science.
+
+Introduction to Data Science with python: A complete guide to learn data science and machine…
+Buy Introduction to Data Science with python: A complete guide to learn data science and machine learning step by step…
+www.amazon.com
+
+In previous articles, we prepared a dataset and built a Logistic Regression model, and we discussed the most common “ML model evaluation metrics” for a classification problem in the fintech space. This article will try to “understand” how our model decision works and what packages can help us to answer this question.
+
+Machine learning models are frequently named “black boxes”. They produce highly accurate predictions. However, we often fail to explain or understand what signal model relies on most to make the decision.
+
+One way to understand and evaluate the model is to use metrics like accuracy, and another way to do it is to use model explainability. And it is an essential task in data science to build an ML model that can make high-quality predictions yet be able to interpret such predictions.
+
+📌 What is the difference between interpretability and explainability?
+
+Data scientists produce ML models that carry complex mathematical representations of world states. Data scientists, product managers, business people, or anyone involved in building and utilizing ML solutions eager to know what governs the ML output. People use ML interpretability or explainability terms interchangeably while discussing ML output. Let’s break down these definitions one by one.
+
+Interpretability is responsible for answering what the fundamental mechanics behind the ML method are. For example, you may build a linear regression model to predict how many umbrellas you sell depending on the precipitation rate in a given region. Knowing model weights and features, you can easily calculate the number of sales. Then, you can answer precisely why and how the model predicted the result.
+
+y (predicted number of umbrellas) = 10 * x (precipitation) + 25
+
+
+drawing by author
+Highly interpretable models like linear regression provide the highest transparency, however, at the cost of performance. Models are general and simple. They won’t describe complex nonlinear situations. Once the model becomes more complicated, we sometimes may no longer understand them.
+
+Explainability, in turn, is responsible for answering the behavior of an ML model in the most straightforward human language. The more complex models are, the harder it is to understand precisely how the inner mechanics impact the prediction. This is where solutions like SHAP (SHapley Additive exPlanations) come in handy. They aim to explain the behavior of your ML model. They help you to understand what input features drive the prediction result.
+
+For example, we learned here that annual income is an important feature in assessing customer’s ability to pay the loan back. But how exactly? How much does higher income bias the model’s predictions? What if we would like to know how other features affect model predictions? This is where explainability helps us.
+
+Explainability in machine learning means that you can explain what happens in your model from input to output, make models transparent and reviewable by your stakeholders, as well as helps you to build better models.
+
+
+picture from SHAP github page
+Apply your business context when trying to pick up an algorithm. For example, ask yourself the following: Does your business need highly explainable models? Will a human use your models? Or do you require highly accurate results?
+
+
+drawing by author
+For example, in our fintech case, we should account for an algorithm with high explainability. In systems where a human step is involved (e.g., in our case, loan officers), we require a deep-level understanding of the model outcomes to make effective business decisions versus wholly automated systems.
+
+Loan officers will be direct customers of the model. A simple probability output may be too superficial in their decision making, therefore we should aim to explain model outputs. We want to provide an ability to interpret machine learning for any given prediction or a subset of predictions.
+
+In our case, we would need to build trust between the model results and the business (e.g., loan officers), and explainability gives us a perfect opportunity to achieve it.
+
+📌 What is global explainability?
+
+We use Global explainability to describe the understanding of how the model works as a holistic view of its features and which features are important. You should note it is also known as feature importance. It is a technique for assigning score points to dependent variables based on how well they can predict your target variable. It essentially provides a list of features that contribute the most to the model decision across all predictions.
+
+Importance estimation plays an essential role in predictive modeling, including providing insight into the data and the model and setting the stage for dimensionality reduction and feature selection, which can improve the efficiency and effectiveness of your model.
+
+As an example, imagine you have an ML model that predicts the probability of an individual earning more than $50,000 in annual income. Then, you can plot SHAP values for features to identify which feature has the highest impact on most of the predictions.
+
+
+picture from SHAP github page
+How do you use it?
+
+First, you can use it to understand your data better. The feature importance gives you a better idea of what features affect the prediction the most. The scores indicate which features are the most relevant to your goal and, conversely, which ones are the least.
+
+You, as a data scientist, may inspect those in more detail, improve and engineer, or collect additional information around this feature to enhance your model. Finally, you may want to drop features that seem not to impact the prediction output to simplify your model, speed up the process and in some cases, improve model performance.
+
+Second, the feature importance helps explain to business stakeholders how your model is making its decisions. You may use these results to agree with stakeholders to gain trust and eventually put your model into production.
+
+Third, you may troubleshoot your model biases by selecting a specific customer segment. For example, how the important features differ for customer segments like various ethnic groups, younger versus older generations, and so on. This may give you a better idea of where to improve your model.
+
+📌 What is local explainability?
+
+Local explainability is concerned with explaining each individual prediction. It answers the question, what signals were the most impactful in the model decision for this particular case?
+
+Imagine your model predicts if a given mushroom is poisonous or not. Local explainability breaks down the prediction decision into each feature value. Like in the example below, the driving factors of the given mushroom to be poison are: the odor is foul, the stalk surface above the ring is silky, and so on.
+
+
+picture from Lime github page
+Local explainability comes in handy when your model is in production. It provides feedback on what’s happening across each inference and the opportunity to audit and troubleshoot your model.
+
+In our fintech case, it helps to highlight to loan officers what key features are the most impacting in predicting possible loan default during the decision process.
+
+What tools do i use to arrive global and local explainability?
+
+Among the most popular open source tools you will come across ELI5, Lime and SHAP. All of them are capable of explainaing what machine learning classifiers are doing. They explain preidictions for text classifiers, regular classifiers and images:
+
+ELI5
+
+
+example from ELI5 page
+
+example from ELI5 page
+Lime
+
+
+example from Lime page
+
+example from Lime page
+SHAP (SHapley Additive exPlanations)
+
+
+example from SHAP page
+We will use SHAP as the explainability module in this article.
+
+📌 Python Hands-on
+
+Let’s see how this library works in practice. First, we load the fintech dataset and fit our logistic regression model (more detailed about this model you will find here)
+
+from sklearn.model_selection import train_test_split 
+from sklearn.linear_model import LogisticRegression 
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True) 
+X = loan.drop('loan_status', axis=1) 
+y = loan[['loan_status']] 
+y = y.values.ravel() 
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y) 
+logreg = LogisticRegression() 
+logreg.fit(X_train, y_train) 
+y_pred = logreg.predict(X_test)
+📌 Global Explainability
+
+We use shap.explainer and shap_values to plot the feature importance beeswarm chart. It is a technique that assigns a score to input features based on how important they are at predicting the target variable.
+
+import shap 
+shap.initjs() 
+explainer = shap.Explainer(logreg, X_train) 
+shap_values = explainer(X_test) 
+shap.plots.beeswarm(shap_values)
+
+Code output shap plot
+How to read this chart:
+
+values to the left of the central vertical line negative class (0), and the right indicates positive class (1)
+the thicker the line on the graph, the more such observation points there are
+the colour indicates the feature value
+In this chart, blue and red mean the feature value, e.g., annual income blue is a smaller value like 40K USD, and red is a higher value like 100K USD. The width of the bars represents the number of observations for a particular feature value. For example, with the annual_inc feature, we can see that most applicants are in the lower-income or blue area. And on axis x, positive SHAP values represent applicants that are likely to churn, and negative values on the left represent applicants that are likely to pay the loan back.
+
+We are learning from this chart that annual_inc, and sub_grade features are the most impactful features driving the outcome prediction. The higher the salary is, or the lower the subgrade is, the more likely the applicant to pay the loan back, which makes total sense in our case.
+
+Another way of viewing the feature’s importance is by using the following bar chart:
+
+shap.plots.bar(shap_values)
+
+coed output shap bar plot
+📌 Local Explainability
+
+For local explainability, let’s look into a few samples and understand what features drive the outcome. We use a bar chart to arrive the local explainability.
+
+Let’s pick up the following applicant: 90K USD annual income, ten years of working experience, good sub_grade, and the applicant applied for a small loan.
+
+shap.plots.bar(shap_values[7])
+
+code output
+The model predicts this applicant will likely pay the loan, and by looking at the actual labels, it is true. By inspecting the driving factors and understanding that this applicant got a solid financial background, we are gaining confidence that the model picks up and uses the right signals.
+
+Another example for the following applicant: 43K Annual Income, and poor sub_grade.
+
+shap.plots.bar(shap_values[6])
+
+code output
+Here we see that the applicant has a low annual income, and a poor subgrade, these are driving factors for the model to decide this applicant is likely not to pay the loan back, and by looking at the actual label, we find that the model predicts it correctly.
+
+This concludes the explainability article!
+
+You could find the notebook here.
+
+Want to learn more? Here is the complete end-to-end data science project for beginners to learn data science. By completing this project: 1) you will experience the entire data science cycle yourself, 2) you will develop a project that you can use to prove your experience, and 3) you will answer the most popular interview questions in case you decide to pursue the career of a data scientist.
+
+Introduction to Data Science with python: A complete guide to learn data science and machine…
+Buy Introduction to Data Science with python: A complete guide to learn data science and machine learning step by step…
+www.amazon.com
+
+What do you struggle with in your early journey? Please share it with me here, and I am happy to help! I listen to your stories carefully and want to produce content that helps you in this journey. For more content like this, sign up for my newsletter.

@@ -1,0 +1,32 @@
+🧠 Section 1: From Beginner to Advanced — The Quant Mindset Shift
+You've built a bot. You've coded RSI/MACD/VWAP. Maybe you've backtested with Zipline. You know how to get the data.
+But now, you want alpha — real edge — and not just technical indicators dressed up in strategy wrappers.
+
+Welcome to the advanced tier.
+
+This level is where traders:
+
+Integrate liquidity signals
+
+Use cointegration instead of correlation
+
+Merge machine learning forecasts with market structure
+
+Build frameworks, not just scripts
+
+Combine neural nets, risk theory, and trend logic into actionable systems
+
+It's not about building the perfect model.
+It’s about building a process that adapts — and automates — insight.
+
+So let’s go beyond the basics.
+Let’s walk through live examples that combine:
+
+✔ Statistical edge (mean reversion, volatility smoothing)
+✔ Machine learning (XGBoost, LSTM)
+✔ Execution frameworks (Backtrader, Alpaca, Pandas, PyTorch)
+✔ Real trend classification pipelines
+
+Each technique we'll explore was drawn from real-world hedge fund workflows, community open-source research, or published alpha-hunting methods.
+
+Next up: Amihud Illiquidity — and how to trade volatility risk itself.

@@ -1,0 +1,168 @@
+Dual Momentum Strategy using Python
+Manish Peshwani
+InsiderFinance Wire
+Manish Peshwani
+
+·
+Follow
+
+Published in
+InsiderFinance Wire
+
+·
+6 min read
+·
+Aug 31, 2024
+195
+
+
+3
+
+
+
+
+
+Growing up as a kid in ’80s, I used to watch Disney Cartoons every Sunday. One of the characters in that series was Uncle Scrooge, the richest duck in the world. I always wondered how he became so wealthy. I did some research and figured that he used the ‘Dual Momentum’ strategy… just kidding :-)
+
+
+Image created with DALL-E
+In one of my previous articles, I discussed the Momentum Strategy, which involves picking up top 10 stocks which are outperforming the rest of the market and investing in them with equal weight. In this article, I will discuss dual momentum strategy, which involves just two assets, an Index and Gold.
+
+Introduction
+The Dual Momentum Strategy is an investment approach introduced by Gary Antonacci, a prominent figure in the field of quantitative investing. This strategy combines two types of momentum — relative momentum and absolute momentum — to create a robust, rules-based investment strategy that has shown impressive historical performance. This article will explore the fundamentals of the Dual Momentum Strategy, demonstrate its implementation using Python, and backtest its effectiveness over time.
+
+What is Momentum Investing?
+Before diving into Dual Momentum, it’s essential to understand the basic concept of momentum investing. Momentum investing is a strategy that capitalizes on the continuance of existing trends in the market. The idea is that assets that have performed well in the recent past will continue to do so in the near future, and vice versa for poorly performing assets.
+
+Dual Momentum Strategy: An Overview
+The Dual Momentum Strategy proposed by Gary Antonacci incorporates two distinct momentum concepts:
+
+Relative Momentum: This aspect of momentum compares the performance of various assets relative to each other. For instance, in a universe of stocks and bonds, relative momentum would suggest investing in the asset that has performed better over a specific period.
+Absolute Momentum: Also known as “time-series momentum,” absolute momentum compares the performance of an asset against its own historical performance. If the asset’s recent performance is positive compared to its longer-term performance, it is considered a good investment.
+By combining these two momentum indicators, the Dual Momentum Strategy seeks to enhance returns while reducing drawdowns.
+
+Implementation of Dual Momentum Strategy in Python
+Let’s implement the Dual Momentum Strategy in Python, using historical data for a simple universe consisting of two assets: a stock index (e.g., Nifty50) and Gold . We will use the yfinance library to fetch historical data and pandas for data manipulation.
+
+Step 1: Import Libraries
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+Step 2: Fetch Historical Data
+# Fetch historical data
+nifty50_ticker = "^NSEI"  # Nifty 50 index ticker
+gold_ticker = "GLD"  # Gold ticker
+
+nifty50_data = yf.download(nifty50_ticker, start="2022-01-01", end="2024-08-27")
+gold_data = yf.download(gold_ticker, start="2022-01-01", end="2024-08-27")
+Step 3: Calculate Momentum Indicators
+I have considered a 200 day exponential moving average for the Nifty50 Index for comparing absolute momentum for the index. If the close price is above 200 day exponential moving average, then it’s absolute momentum is good.
+
+For relative momentum, my logic is to compare 1 year (252 days) return between Gold and index. If the yearly return of Index is better than yearly return of Gold, then stay invested in Index, else switch to Gold
+
+# Calculate the 200-day EMA for Nifty 50
+nifty50_data['200_EMA'] = nifty50_data['Close'].ewm(span=200, adjust=False).mean()
+
+# Calculate yearly returns for Nifty 50 and Gold
+nifty50_data['Yearly_Return'] = nifty50_data['Close'].pct_change(252)
+gold_data['Yearly_Return'] = gold_data['Close'].pct_change(252)
+
+# Align gold data with Nifty 50 data
+gold_data = gold_data.reindex(nifty50_data.index).fillna(method='ffill')
+Step 4: Signal Generation
+# Generate trading signals based on the updated strategy
+nifty50_data['Signal'] = 0
+nifty50_data.loc[(nifty50_data['Close'] > nifty50_data['200_EMA']) & 
+                 (nifty50_data['Yearly_Return'] > gold_data['Yearly_Return']), 'Signal'] = 1  # Buy Nifty 50
+nifty50_data.loc[nifty50_data['Signal'] == 0, 'Signal'] = -1  # Shift to Gold
+Step 5: Calculate strategy returns
+Here we calculate the strategy returns and also calculate the returns if we had just had a index buy and hold strategy.
+
+# Calculate daily returns
+nifty50_data['Nifty50_Returns'] = nifty50_data['Close'].pct_change()
+gold_data['Gold_Returns'] = gold_data['Close'].pct_change()
+
+# Calculate strategy returns
+nifty50_data['Strategy_Returns'] = np.where(
+    nifty50_data['Signal'] == 1, 
+    nifty50_data['Nifty50_Returns'], 
+    gold_data['Gold_Returns']
+)
+
+# Calculate cumulative returns (equity curve) for the strategy
+nifty50_data['Strategy_Equity_Curve'] = (1 + nifty50_data['Strategy_Returns']).cumprod()
+
+# Calculate Buy and Hold returns for Nifty 50
+nifty50_data['Buy_Hold_Equity_Curve'] = (1 + nifty50_data['Nifty50_Returns']).cumprod()
+Step 6: Measure drawdown
+# Calculate Drawdowns for Dual Momentum Strategy
+nifty50_data['Strategy_Peak'] = nifty50_data['Strategy_Equity_Curve'].cummax()
+nifty50_data['Strategy_Drawdown'] = (nifty50_data['Strategy_Equity_Curve'] - nifty50_data['Strategy_Peak']) / nifty50_data['Strategy_Peak']
+
+# Calculate Drawdowns for Buy & Hold Strategy
+nifty50_data['Buy_Hold_Peak'] = nifty50_data['Buy_Hold_Equity_Curve'].cummax()
+nifty50_data['Buy_Hold_Drawdown'] = (nifty50_data['Buy_Hold_Equity_Curve'] - nifty50_data['Buy_Hold_Peak']) / nifty50_data['Buy_Hold_Peak']
+
+# Identify switch points
+switch_points = nifty50_data['Signal'].diff().fillna(0) != 0
+Step 7: Plot the equity curve and drawdown comparisons
+# Plot the equity curves with switch points
+plt.figure(figsize=(14, 7))
+plt.plot(nifty50_data['Strategy_Equity_Curve'], label='Dual Momentum Strategy')
+plt.plot(nifty50_data['Buy_Hold_Equity_Curve'], label='Buy & Hold Nifty 50', linestyle='--')
+
+# Plot switch points
+switch_from_nifty_to_gold = (nifty50_data['Signal'].diff() < 0) & switch_points
+switch_from_gold_to_nifty = (nifty50_data['Signal'].diff() > 0) & switch_points
+
+plt.scatter(nifty50_data.index[switch_from_nifty_to_gold], 
+            nifty50_data['Strategy_Equity_Curve'][switch_from_nifty_to_gold], 
+            color='orange', label='Switch to Gold', marker='o', s=30)
+
+plt.scatter(nifty50_data.index[switch_from_gold_to_nifty], 
+            nifty50_data['Strategy_Equity_Curve'][switch_from_gold_to_nifty], 
+            color='green', label='Switch to Nifty 50', marker='o', s=30)
+
+plt.title('Dual Momentum Strategy vs. Buy & Hold Nifty 50 with Switch Points')
+plt.xlabel('Date')
+plt.ylabel('Cumulative Returns')
+plt.legend(loc='upper left')
+plt.grid(True)
+plt.show()
+
+# Plot Drawdowns
+plt.figure(figsize=(14, 7))
+plt.plot(nifty50_data['Strategy_Drawdown'], label='Dual Momentum Strategy Drawdown', color='red')
+plt.plot(nifty50_data['Buy_Hold_Drawdown'], label='Buy & Hold Nifty 50 Drawdown', color='blue', linestyle='--')
+plt.title('Drawdown Comparison: Dual Momentum Strategy vs. Buy & Hold Nifty 50')
+plt.xlabel('Date')
+plt.ylabel('Drawdown')
+plt.legend(loc='lower left')
+plt.grid(True)
+plt.show()
+
+# Print max drawdowns
+max_strategy_drawdown = nifty50_data['Strategy_Drawdown'].min()
+max_buy_hold_drawdown = nifty50_data['Buy_Hold_Drawdown'].min()
+
+print(f"Max Drawdown of Dual Momentum Strategy: {max_strategy_drawdown:.2%}")
+print(f"Max Drawdown of Buy & Hold Nifty 50 Strategy: {max_buy_hold_drawdown:.2%}")
+Executing the above steps will plot the below result
+
+
+
+You can clearly see that the returns of the dual momentum strategy is far superior as compared to the index buy and hold strategy. The cherry on the cake is that drawdowns of the strategy is much lower as compared to the buy and hold strategy.
+
+I took the period covering the 2008 subprime crisis and the 2020 covid times to see how the strategy performed vis-a-vis buy and hold. In both these difficult times, the strategy performed better.
+
+Advantages of the Dual Momentum Strategy
+Reduced Drawdowns: By incorporating absolute momentum, the strategy avoids investing in assets with negative momentum, potentially reducing the risk of large drawdowns during bear markets.
+Enhanced Returns: The combination of relative and absolute momentum helps in capturing strong trends while avoiding weak or negative-performing assets.
+Simplicity and Transparency: The strategy is straightforward to implement, with clear rules that can be consistently applied over time.
+Conclusion
+The Dual Momentum Strategy by Gary Antonacci is a powerful yet straightforward approach to investing, combining the benefits of both relative and absolute momentum. Through the implementation and backtesting in Python, we see how this strategy can potentially enhance returns while minimizing risks. However, like all strategies, it’s important to remember that past performance does not guarantee future results, and investors should consider their risk tolerance and investment goals before implementing any strategy.
+
+By incorporating momentum investing principles into your portfolio, the Dual Momentum Strategy can serve as a valuable tool in the quest for long-term financial growth and stability.
+
+Disclaimer: I am not a financial advisor, the content in this article is solely for educational purposes. You should always contact your financial advisor before making any kind of investment decision.

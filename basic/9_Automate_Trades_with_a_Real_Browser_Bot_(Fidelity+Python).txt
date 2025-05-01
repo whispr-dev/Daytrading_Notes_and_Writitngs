@@ -1,0 +1,148 @@
+🤖 The Beginner's Blueprint to Day Trading with Python
+Part 9: Automate Trades with a Real Browser Bot (Fidelity + Python)
+✦ What Are We Doing?
+We’ll log in to Fidelity automatically using:
+
+pyautogui: simulates mouse + keyboard
+
+Shortkeys Chrome extension: runs JavaScript in the browser
+
+Secure workflows: partial credentials only in browser memory
+
+No Selenium. Fidelity blocks Selenium. This is stealthy and robust.
+
+✦ Before You Start
+Install the Shortkeys extension in Chrome:
+Shortkeys for Chrome
+
+Add 3 new keybindings:
+
+ctrl+l → sets username's first character
+
+ctrl+alt+l → sets password’s first character
+
+ctrl+b → clicks the login button
+
+Here’s the JavaScript you’ll paste into each Shortkey:
+
+js
+Copy
+Edit
+// Username shortcut (ctrl+l)
+document.getElementById('dom-username-input').value = 'f'
+
+// Password shortcut (ctrl+alt+l)
+document.getElementById('dom-pswd-input').value = 'P'
+
+// Login button shortcut (ctrl+b)
+document.getElementById('dom-login-button').click();
+You’ll finish the rest of the username and password via pyautogui so they’re not stored anywhere.
+
+💻 Full Python Login Automation Script
+📄 bots/fidelity_login_bot.py
+
+python
+Copy
+Edit
+import pyautogui
+import pyperclip
+import subprocess
+import time
+from datetime import datetime, timedelta
+
+pyautogui.FAILSAFE = False
+
+shortkeys = {
+    'USERNAME_INPUT': ['ctrl', 'l'],
+    'PASSWORD_INPUT': ['ctrl', 'alt', 'l'],
+    'LOGIN_BUTTON': ['ctrl', 'b'],
+}
+
+def open_browser_and_navigate(browser='Google Chrome'):
+    subprocess.Popen(["open", "-na", browser, "--args", "--new-window", "https://digital.fidelity.com/prgw/digital/login/full-page"])
+    time.sleep(4)
+
+def send_shortcut(keys):
+    pyautogui.hotkey(*keys)
+    time.sleep(0.5)
+
+def paste_string(s):
+    pyperclip.copy(s)
+    pyautogui.hotkey('command', 'v')
+    time.sleep(0.5)
+
+def login(username_rest, password_rest):
+    open_browser_and_navigate()
+
+    send_shortcut(shortkeys['USERNAME_INPUT'])
+    paste_string(username_rest)
+
+    send_shortcut(shortkeys['PASSWORD_INPUT'])
+    paste_string(password_rest)
+
+    send_shortcut(shortkeys['LOGIN_BUTTON'])
+
+if __name__ == "__main__":
+    login("r0b0tW0lf", "H4cksMarkets!")
+Important:
+
+Only the first character of each credential is in Shortkeys
+
+The rest is pasted from secure Python memory
+
+pyperclip makes sure the paste action behaves like a real human
+
+🧪 Bonus: Page Text Scanner
+Want to wait until the login finishes?
+
+📄 bots/page_text_watcher.py
+
+python
+Copy
+Edit
+def wait_for_text(target, timeout=10):
+    start = datetime.now()
+    while (datetime.now() - start).seconds < timeout:
+        pyautogui.hotkey('command', 'a')
+        pyautogui.hotkey('command', 'c')
+        page = pyperclip.paste()
+        if target in page:
+            return True
+        time.sleep(0.25)
+    return False
+This lets your bot wait for a successful login message or error.
+
+🛡️ Security Tip
+Don't hardcode your full password into scripts. Options:
+
+Use a prompt: getpass.getpass()
+
+Store encrypted string in .env or GPG file
+
+Split credentials across tools like we just did
+
+🧠 What Can You Do Now?
+Once logged in, you can:
+
+Scrape holdings, balances, watchlists
+
+Use pyautogui to click, tab, and fill forms
+
+Dynamically update stop-losses
+
+Place trades based on real-time strategy output
+
+You’ve now got a bridge from Python logic → browser execution.
+
+✦ Coming Up Next: Your Full Trading Bot Architecture
+In Part 10, we’ll:
+
+Build a proper bot using MACD + RSI + VWAP
+
+Connect to real brokers like Alpaca
+
+Structure your code into a modular engine
+
+Show how the Pollen bot works (from Stefan's doc)
+
+We’ll bring everything full circle — strategy → execution → feedback loop.

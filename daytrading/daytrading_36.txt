@@ -1,0 +1,407 @@
+The 8787%+ ROI Algo Strategy Unveiled for Crypto Futures! Revolutionized With Famous RSI, MACD, Bollinger Bands, ADX, EMA
+Puranam Pradeep Picasso - ImbueDesk Profile
+Puranam Pradeep Picasso - ImbueDesk Profile
+
+·
+Follow
+
+13 min read
+·
+Nov 15, 2023
+246
+
+
+3
+
+
+
+
+
+Understanding 8787+% Returns: A Deep Dive into Our Backtested Results
+
+7th Edition of the famous Algorithmic Trading Strategies articles’ on building PROFITABLE TRADING SYSTEM. (New Strategy)
+
+1st Edition: “Unlock 4450% Profit with Algorithm Trading on Cryptocurrency: A Freqtrade Case Study” — Link
+2nd Edition: “2509% Profit Unlocked: A Case Study on Algorithmic Trading with Freqtrade” — LINK
+3rd Edition: “Unleashing the Power: Unveiling a 10,000%+ Profit Surge in 2.5 Years with Advanced Cryptocurrency Algorithmic Trading Using Freqtrade” — LINK
+4th Edition: “Unraveling the Cryptocurrency Market: How Pivot Points and Price Action Led to 6204%+ Profit in Backtesting using Freqtrade ” — Link
+5th Edition: “ Whooping 3202%+ profit with Famous UTBot Alerts from TradingView using Python on Freqtrade” — Link
+6th Edition: “Unlocking 3106+% Profits Using Algorithmic Trading on 130+ Crypto Assets! — From Pine Code to Python” — Link
+Table of Contents
+Introduction to Algo Trading
+The Evolution of Trading
+Algo Trading in the Modern Market
+2. Understanding the Strategy
+
+Overview of the Algo Trading Strategy
+The Fusion of Technical Indicators
+3. The Mechanics of the Code
+
+Anatomy of the trade_signal Function
+Criteria for Long and Short Positions
+4. In-Depth Indicator Analysis
+
+Relative Strength Index (RSI) Explained
+The Role of Moving Average Convergence Divergence (MACD)
+Deciphering Bollinger Bands
+5. Entry and Exit Strategy
+
+Conditions for Market Entry
+Crafting an Exit Plan
+6. Leveraging Freqtrade
+
+Introduction to Freqtrade Platform
+Building Strategies with Freqtrade
+7. Performance Review
+
+Evaluating the 8787+% Profit
+Analyzing the 1024-Day Trading Period
+8. The Power of Python in Algo Trading
+
+Python’s Role in Strategy Development
+Customization and Flexibility with Python Code
+9. Conclusion
+
+The Future of Algorithmic Trading
+Embracing Algo Trading in Cryptocurrency Markets
+10. Appendix
+
+Glossary of Technical Terms
+Additional Resources and Readings
+1. Introduction to Algo Trading
+The Evolution of Trading
+Trading has progressed from the open outcry system to a digital playground where milliseconds separate profit from loss. Algo trading has been the catalyst of this evolution, transforming market data into actionable intelligence.
+
+Algo Trading in the Modern Market
+The modern market demands speed, efficiency, and accuracy. Algo trading harnesses these through sophisticated algorithms that can execute trades at a pace no human could match, all while minimizing errors and maximizing potential returns.
+
+2. Understanding the Strategy
+Overview of the Algo Trading Strategy
+This strategy is a concoction of well-established technical indicators, tailored for the volatile cryptocurrency market. It is a systematic approach that aims to capitalize on market trends and momentum for profitable trades.
+
+Strategy with Bollinger bands, MACD, RSI, EMA, ADX setup and developed Algo on this
+Strategy with Bollinger bands, MACD, RSI, EMA, ADX setup and developed Algo on this
+The Fusion of Technical Indicators
+At the heart of the strategy are three pivotal indicators: the RSI, MACD, and Bollinger Bands. Each plays a vital role in identifying potential trade opportunities.
+
+3. The Mechanics of the Code
+Anatomy of the trade_signal Function
+
+from functools import reduce
+from math import sqrt
+import numpy as np
+import pandas as pd
+from pandas import DataFrame
+
+from freqtrade.persistence import Trade
+
+import talib.abstract as ta
+
+def trade_signal(dataframe, rsi_tp = 14, bb_tp = 20):
+    # Compute indicators
+    dataframe['RSI'] = ta.RSI(dataframe['close'], timeperiod=rsi_tp)
+    dataframe['upper_band'], dataframe['middle_band'], dataframe['lower_band'] = ta.BBANDS(dataframe['close'], timeperiod=bb_tp)
+    dataframe['macd'], dataframe['signal'], _ = ta.MACD(dataframe['close'])
+
+    # LONG Trade conditions
+    conditions_long = ((dataframe['RSI'] > 30) & (dataframe['close'] > dataframe['lower_band']) & (dataframe['macd'] > dataframe['signal']))
+    conditions_short = ((dataframe['RSI'] < 70) & (dataframe['close'] < dataframe['upper_band']) & (dataframe['macd'] < dataframe['signal']))
+    
+    # dataframe['signal'] = 0
+    dataframe.loc[conditions_long, 'signal'] = 1
+    dataframe.loc[conditions_short, 'signal'] = -1
+
+    return dataframe
+The trade_signal function is the strategy's core, processing market data and signaling when to enter and exit trades. It calculates the indicators’ values and evaluates whether conditions for a trade are met.
+
+You can find the whole code here — https://patreon.com/pppicasso
+
+Criteria for Long and Short Positions
+for Long
+
+conditions_long = ((dataframe['RSI'] > 30) & (dataframe['close'] > dataframe['lower_band']) & (dataframe['macd'] > dataframe['signal']))
+For Short
+
+conditions_short = ((dataframe['RSI'] < 70) & (dataframe['close'] < dataframe['upper_band']) & (dataframe['macd'] < dataframe['signal']))
+The function sets precise criteria for long and short positions based on the computed indicators, ensuring that trades are only made when the market conditions align with the strategy’s objectives.
+
+4. In-Depth Indicator Analysis
+Relative Strength Index (RSI) Explained
+The RSI helps identify the momentum and conditions where an asset might be overbought or oversold. This insight is crucial in deciding entry and exit points for trades.
+
+The Role of Moving Average Convergence Divergence (MACD)
+The MACD is a trend-following momentum indicator that shows the relationship between two moving averages of an asset’s price. It helps confirm the momentum direction signaled by the RSI.
+
+Deciphering Bollinger Bands
+Bollinger Bands provide a relative view of high and low prices, which can inform trading decisions by highlighting periods of market volatility and potential price breakouts.
+
+5. Entry and Exit Strategy
+Conditions for Market Entry
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+
+        dataframe.loc[
+            (
+                        (
+                            (dataframe['adx'] > self.adx_long_min_1.value) & # trend strength confirmation
+                            (dataframe['adx'] < self.adx_long_max_1.value)
+                        ) |
+                        (
+                            (dataframe['adx'] > self.adx_long_min_2.value) & # trend strength confirmation
+                            (dataframe['adx'] < self.adx_long_max_2.value)
+                        ) & # trend strength confirmation
+                        (dataframe['signal'] > 0) &
+                        (dataframe['volume'] > dataframe['volume_mean']) &
+                        (dataframe['volume'] > 0)
+
+            ),
+            'enter_long'] = 1
+
+        dataframe.loc[
+            (
+                        (
+                            (dataframe['adx'] > self.adx_short_min_1.value) & # trend strength confirmation
+                            (dataframe['adx'] < self.adx_short_max_1.value)
+                        ) |
+                        (
+                            (dataframe['adx'] > self.adx_short_min_2.value) & # trend strength confirmation
+                            (dataframe['adx'] < self.adx_short_max_2.value)
+                        ) & # trend strength confirmation
+                        (dataframe['signal'] < 0) &
+                        (dataframe['volume'] > dataframe['volume_mean_s']) # volume weighted indicator
+            ),
+            'enter_short'] = 1
+        
+        return dataframe
+Entry conditions are determined by combining the signals from the RSI, MACD, and Bollinger Bands. A trade is entered when these indicators align, suggesting a high probability of a favorable move.
+
+You can find the whole code here — https://patreon.com/pppicasso
+
+Crafting an Exit Plan
+    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+
+        conditions_long = []
+        conditions_short = []
+        dataframe.loc[:, 'exit_tag'] = ''
+
+        exit_long = (
+                # (dataframe['close'] < dataframe['low'].shift(self.sell_shift.value)) &
+                (dataframe['close'] < (dataframe['ema_l'] - (self.atr_long_mul.value * dataframe['atr']))) &
+                (dataframe['volume'] > dataframe['volume_mean_exit'])
+        )
+
+        exit_short = (
+                # (dataframe['close'] > dataframe['high'].shift(self.sell_shift_short.value)) &
+                (dataframe['close'] > (dataframe['ema_s'] + (self.atr_short_mul.value * dataframe['atr']))) &
+                (dataframe['volume'] > dataframe['volume_mean_exit_s'])
+        )
+
+        conditions_short.append(exit_short)
+        dataframe.loc[exit_short, 'exit_tag'] += 'exit_short'
+
+
+        conditions_long.append(exit_long)
+        dataframe.loc[exit_long, 'exit_tag'] += 'exit_long'
+
+
+        if conditions_long:
+            dataframe.loc[
+                reduce(lambda x, y: x | y, conditions_long),
+                'exit_long'] = 1
+
+        if conditions_short:
+            dataframe.loc[
+                reduce(lambda x, y: x | y, conditions_short),
+                'exit_short'] = 1
+            
+        return dataframe
+The exit strategy is just as important as the entry. It involves conditions based on the indicators that signal when a trade may no longer be viable, helping to secure profits and minimize losses.
+
+You can find the whole code here — https://patreon.com/pppicasso
+
+6. Leveraging Freqtrade
+Introduction to Freqtrade Platform
+We have covered lot of introductory topics in the 1st edition which covers all key basic concepts which I mentioned below, if you are new to “trading”, “algorithm trading”, “freqtrade” platform or “futures trading” concepts, I suggest you to open my previous articles and go through the same.
+
+I’m here to talk about my new strategy which I was working for past few months
+
+Introductory Topics already covered in 1st edition: (Link)
+Introduction to algorithmic trading and its benefits
+
+What algorithmic trading is and how it can be used in the context of crypto futures trading
+
+Some of the benefits of using algorithmic trading for crypto futures include:
+
+Introduction to the freqtrade platform
+
+Here are some key features of the freqtrade platform:
+
+What is Short Trading and Long Trading in Futures Market
+
+How Leverage works and Factors to consider while using Leverage during Trades
+
+There are a few factors that traders should consider when deciding whether and how to use leverage:
+Risk appetite: Traders with a higher risk appetite may be more comfortable using larger amounts of leverage, while those who are more risk-averse may prefer to use less leverage or none at all.
+Trading strategy: Different trading strategies may be more or less suitable for leveraging, depending on the level of risk involved and the trader’s goals.
+Market conditions: The level of leverage that is appropriate for a trade may also depend on the current market conditions, such as the level of volatility or the overall trend of the market.
+Trading capital: Traders should also consider their available capital when deciding how much leverage to use, as they will need to have sufficient margin to cover any potential losses.
+In general, it’s important for traders to carefully evaluate the potential risks and rewards of using leverage and to use it responsibly, as it can significantly impact the outcome of a trade.
+
+Building Strategies with Freqtrade
+Freqtrade allows for the creation of custom strategies using Python, offering flexibility and extensive customization to traders. It facilitates backtesting, optimization, and live trading in a unified environment.
+
+There are lot of tutorials about how to connect Freqtrade using docker in a containerized environment. You can refer to any of the many Youtube tutorials on the same.
+Here, Our main agenda is to show case the backtest and forward test results of the algorithm trading on freqtrade, so, I will focus on that more.
+If there is a lot of demand and requests in comments for a tutorial on how to setup freqtrade and run your own strategies if requested, I will add that in forth coming article. Thank you
+Resources:
+https://youtu.be/ASq2aeUHen8
+
+or
+
+https://youtu.be/PrPGKHCx5qY
+
+or
+
+https://youtu.be/H2OkrvSojOI
+
+I’m giving reference only.
+
+7. Performance Review
+Evaluating the 8787+% Profit
+The strategy’s performance speaks volumes, with a reported 8787+% profit over a period of 1024 days. Such figures highlight the potential of algorithmic trading when executed with precision.
+
+To backtest a trading strategy with freqtrade, you will need to follow these steps:
+Create a configuration file: Freqtrade requires a configuration file to specify the details of your crypto futures exchange account and your desired trading parameters. To create a configuration file, copy the sample configuration file provided in the freqtrade repository to a new file called “config.json”. Then, edit the file to specify your exchange credentials and desired trading parameters.
+Prepare your market data: Freqtrade requires a set of market data to use in the backtest. This data should be in the form of a CSV file with columns for the date, open price, high price, low price, close price, and volume of the asset being traded. You can obtain this data from a variety of sources, such as a cryptocurrency exchange or a market data provider.
+Run the backtest: Once you have your configuration file and market data ready, you can run the backtest by executing the following command:
+freqtrade backtesting --config config.json --strategy MyStrategy --datadir data/
+Replace “MyStrategy” with the name of your strategy function and “data/” with the directory where your market data is stored. This will run the backtest using the settings specified in your configuration file and the market data provided.
+
+Review the results: Once the backtest is complete, freqtrade will generate a report with information on the performance of your strategy. This report will include metrics such as the profit/loss, the number of trades executed, and the win/loss ratio of the strategy. You can use this information to evaluate the performance of your strategy and make any necessary adjustments.
+Monthly Results using RSI, MACD, Bollinger Bands Strategy done using Python on Freqtrade Platform
+Monthly Results using RSI, MACD, Bollinger Bands Strategy done using Python on Freqtrade Platform
+Monthly Results using RSI, MACD, Bollinger Bands Strategy done using Python on Freqtrade Platform
+
+You can find the whole code here — https://patreon.com/pppicasso
+
+freqtrade backtesting profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+
+freqtrade backtesting profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+freqtrade backtesting profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+freqtrade backtesting profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+
+You can find the whole code here — https://patreon.com/pppicasso
+
+freqtrade backtesting summary profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+freqtrade backtesting summary profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+freqtrade backtesting summary profit for RSI, MACD, Bollinger Bands Crypto Algorithmic Strategy 2023
+
+You can find the whole code here — https://patreon.com/pppicasso
+
+By investing 1000 USDT, (1 USD approximately equal to 1 USDT with 1–2% variance)
+
+for a period of 1024 days from 2021–01–06 00:00:00 up to 2023–10–27 00:00:00 (1024 days)
+
+with maximum open trades at any given point of time being 4
+
+maximum stake in each trade entry being around 200 USDT,
+
+has given a Profit of 8787% Profit return on investment (ROI).
+
+The Absolute Draw-down mentioned from results is at — 1.78%
+
+Daily Win to Lose Ratio is at — 706 days of WIN, 309 Days loss and 10 Days of Draw (Open trades which haven’t closed yet)
+
+Average Daily profit is at — 2.02% per day
+
+Daily Average Trades is — 21.28 approximate
+
+Market Returns Have been (if you buy and hold Bitcoin (BTCUSDT) for the above mentioned period the returns are mentioned here, instead of trading) — 25.75%
+
+Time Frame used is 1h
+
+Tips for Improving Strategy Performance For Algorithmic Trading:
+Optimize Indicators: Fine-tune the parameters of indicators like ATR, EMA, and ADX to find optimal settings for the specific asset and market conditions.
+Portfolio Diversification: Consider diversifying the portfolio by incorporating additional assets or using different strategies for various assets to reduce risk.
+Risk Management: Adjust position sizing and risk parameters to control exposure and manage drawdowns effectively.
+Backtesting: Thoroughly backtest the strategy over different market conditions and time periods to ensure robustness and adaptability.
+Hyper-parameter Optimization: Use techniques like grid search or random search to optimize hyper-parameters for better performance.
+Market Research: Stay updated with market trends, news, and events that could impact the performance of the trading strategy.
+Continuous Learning: Stay informed about new features, updates, and best practices in FreqTrade to make the most of the trading bot.
+Regular Evaluation: Periodically review and analyze the strategy’s performance to identify areas for improvement and necessary adjustments.
+Risk-Reward Ratio: Adjust the risk-reward ratio for trade entries and exits to optimize potential profits while minimizing losses.
+Adaptability: Modify and adapt the strategy as market conditions change to ensure its relevance and effectiveness.
+Remember that trading involves inherent risks, and there’s no guaranteed way to avoid losses. Implementing these tips can enhance the strategy’s potential, but careful risk management and continuous monitoring are essential for long-term success.
+
+Please ensure to thoroughly test any modifications to the code on historical data and conduct proper risk assessment before deploying the strategy in a live trading environment.
+
+Analyzing the 1024-Day Trading Period
+The trading period saw various market conditions, and the strategy’s ability to adapt and capitalize on these changes was key to its success.
+
+Key Findings from Results:
+Profit and ROI: The trading strategy yielded a significant profit of 8787%+ return on investment (ROI) over a span of 1024 days.
+Drawdown: The absolute drawdown reached a maximum of -1.78%, indicating relatively low risk exposure.
+Win-Lose Ratio: The daily win-lose ratio showed 706 days of WIN, 309 Days loss and 10 Days of Draw trades.
+Average Daily Profit: The average daily profit was calculated at 2.02%, suggesting consistent positive returns on most trading days.
+Market Returns Comparison: The trading strategy outperformed the market, which had a return of 25.74% over the same period.
+Time Frame: The strategy operated on a 1-hour time frame.
+You can find the whole code here — https://patreon.com/pppicasso
+
+8. The Power of Python in Algo Trading
+Python’s Role in Strategy Development
+Python’s simplicity and power make it an ideal choice for developing trading algorithms. Its vast ecosystem of libraries and tools allows for rapid development and deployment.
+
+Customization and Flexibility with Python Code
+Python code offers the flexibility to tailor strategies to specific market behaviors, making it a valuable asset in the algo trader’s toolkit.
+
+9. Conclusion
+The Future of Algorithmic Trading
+Algorithmic trading continues to shape the future of the markets, with strategies becoming ever more sophisticated and integral to trading success.
+
+Embracing Algo Trading in Cryptocurrency Markets
+The volatility of cryptocurrency markets presents unique challenges and opportunities for algo traders, and strategies like the one outlined here are at the forefront of this exciting frontier.
+
+This guide walked you through a systematic conversion process tailored for the freqtrade platform, a popular Python-based platform for trading cryptocurrencies.
+
+Feel free to enhance and customize the article according to your needs. This article provides an overview of the Python implementation of TrendAlert, explains each line of code, and demonstrates its application with different indicators. It also emphasizes the importance of backtesting and customization for successful trading.
+
+It’s important to note that past performance does not guarantee future results, and continuous monitoring and optimization of the algorithm are essential to adapt to changing market conditions. Additionally, it is crucial to exercise proper risk management and conduct thorough testing before deploying the algorithm with real funds.
+
+10. Appendix
+Glossary of Technical Terms
+Algorithmic Trading (Algo Trading): A method of executing orders using automated pre-programmed trading instructions to account for variables such as time, price, and volume.
+
+Relative Strength Index (RSI): A momentum indicator that measures the magnitude of recent price changes to evaluate overbought or oversold conditions.
+
+Moving Average Convergence Divergence (MACD): A trend-following momentum indicator that shows the relationship between two moving averages of a security’s price.
+
+Bollinger Bands: A type of price envelope developed by John Bollinger that defines upper and lower price range levels.
+
+ADX (Average Directional Index): An indicator used to determine the strength of a trend.
+
+EMA (Exponential Moving Average): A type of moving average that places a greater weight and significance on the most recent data points.
+
+ATR (Average True Range): An indicator to measure market volatility by decomposing the entire range of an asset price for that period.
+
+Docker: A set of platform-as-a-service products that use OS-level virtualization to deliver software in packages called containers.
+
+Freqtrade: An open-source cryptocurrency trading bot written in Python that is designed to support algorithmic trading strategies.
+
+Python: An interpreted, high-level, general-purpose programming language with a design philosophy that emphasizes code readability.
+
+Additional Resources and Readings
+For those eager to delve deeper into the world of algorithmic trading and enhance their knowledge on the subject, consider exploring the following resources:
+
+“Algorithmic Trading: Winning Strategies and Their Rationale” by Ernie Chan
+“Python for Finance: Mastering Data-Driven Finance” by Yves Hilpisch
+“Technical Analysis of the Financial Markets” by John J. Murphy
+“Building Winning Algorithmic Trading Systems” by Kevin Davey
+Online courses on platforms like Coursera, Udemy, and edX that offer specific classes on algorithmic trading, Python programming, and financial analysis.
+These resources will provide a comprehensive foundation for understanding the technical aspects of algo trading and the application of Python in finance. Additionally, participating in online forums and communities such as Stack Overflow, GitHub, and Reddit’s r/algotrading can offer practical insights and peer support.
+
+Thank you, Readers.
+
+I hope you have found this article on Algorithmic strategy to be informative and helpful. As a creator, I am dedicated to providing valuable insights and analysis on cryptocurrency, stock market and other assets management.
+
+If you have enjoyed this article and would like to support my ongoing efforts, I would be honored to have you as a member of my Patreon community. As a member, you will have access to exclusive content, early access to new analysis, and the opportunity to be a part of shaping the direction of my research.
+
+Membership starts at just $10, and you can choose to contribute on a bi-monthly basis. Your support will help me to continue to produce high-quality content and bring you the latest insights on financial analytics.

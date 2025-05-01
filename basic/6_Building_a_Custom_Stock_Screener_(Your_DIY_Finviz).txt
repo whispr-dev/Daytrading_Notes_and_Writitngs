@@ -1,0 +1,150 @@
+🔍 The Beginner's Blueprint to Day Trading with Python
+Part 6: Building a Custom Stock Screener (Your DIY Finviz)
+✦ Why a Screener?
+Markets are huge. There are:
+
+500+ S&P 500 stocks
+
+Thousands of tradable tickers
+
+Way too much data to read manually
+
+A screener helps you:
+
+Find stocks meeting your conditions
+
+Filter by market cap, price, performance, or indicator
+
+Rank results for further analysis or bot input
+
+✦ Your Screener’s Features
+We’ll build a Python script that: ✅ Loads the full S&P 500 list
+✅ Pulls stock data from Yahoo Finance
+✅ Calculates:
+
+52-week high/low position
+
+Market cap classification (nano → mega) ✅ Exports the results as a .csv or .xlsx file
+
+🛠️ Full Script: Screener v1
+📄 strategies/stock_screener.py
+
+python
+Copy
+Edit
+import pandas as pd
+import yfinance as yf
+from datetime import datetime
+
+# 1. Get S&P 500 tickers from Wikipedia
+sp500 = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+tickers = sp500['Symbol'].tolist()
+
+# 2. Clean up symbols
+tickers = [t.replace('.', '-') for t in tickers]
+
+# 3. Initialize results list
+results = []
+
+# 4. Loop through tickers
+for ticker in tickers:
+    try:
+        print(f"Fetching: {ticker}")
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period='1y')
+        info = stock.info
+
+        current = hist['Close'].iloc[-1]
+        high_52w = hist['Close'].max()
+        low_52w = hist['Close'].min()
+        market_cap = info.get('marketCap', 0)
+
+        if not current or not high_52w or not low_52w or not market_cap:
+            continue
+
+        pos = (current - low_52w) / (high_52w - low_52w) * 100
+
+        def classify_market_cap(cap):
+            if cap < 50e6: return 'Nano'
+            if cap < 300e6: return 'Micro'
+            if cap < 2e9: return 'Small'
+            if cap < 10e9: return 'Mid'
+            if cap < 200e9: return 'Large'
+            return 'Mega'
+
+        cap_class = classify_market_cap(market_cap)
+
+        results.append({
+            'Ticker': ticker,
+            'Price': round(current, 2),
+            '52W Low': round(low_52w, 2),
+            '52W High': round(high_52w, 2),
+            'Position (%)': round(pos, 2),
+            'Market Cap': round(market_cap / 1e9, 2),
+            'Cap Class': cap_class
+        })
+
+    except Exception as e:
+        print(f"{ticker} failed: {e}")
+
+# 5. Save to CSV
+df = pd.DataFrame(results)
+df.sort_values(by='Position (%)', ascending=False, inplace=True)
+
+timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+df.to_csv(f'data/screener_results_{timestamp}.csv', index=False)
+print(f"\n✅ Screener done. Results saved to: data/screener_results_{timestamp}.csv")
+🧪 Sample Output (CSV)
+mathematica
+Copy
+Edit
+Ticker,Price,52W Low,52W High,Position (%),Market Cap,Cap Class
+NVDA,888.68,358.2,942.89,94.12,2100.23,Mega
+AAPL,176.55,123.15,179.5,93.3,2825.14,Mega
+TSLA,198.43,104.32,261.9,78.14,650.25,Mega
+...
+🧠 Useful Use Cases
+Find breakout stocks near 52-week highs
+
+Look for rebounds near 52-week lows
+
+Scan for mid-caps in consolidation
+
+Focus on large caps above 90% position
+
+This screener is totally customizable:
+
+Add RSI/EMA as new columns
+
+Filter by sector using info['sector']
+
+Add sentiment or earnings date columns
+
+💾 Bonus: Save to Excel with Formatting
+📄 strategies/stock_screener_excel.py
+
+python
+Copy
+Edit
+# Replace final save step with:
+excel_path = f"data/screener_results_{timestamp}.xlsx"
+df.to_excel(excel_path, index=False)
+
+print(f"\n✅ Screener results saved to: {excel_path}")
+Open in Excel or import to Google Sheets — ready to mark up and analyze.
+
+✦ Coming Up Next: Strategy Design
+In Part 7, we’ll:
+
+Build your first real indicator-based strategy
+
+Combine RSI + MACD + EMA into a rule set
+
+Simulate buy/sell signals on past data
+
+Visualize trades directly on a chart
+
+Prep it for backtesting in Zipline later
+
+This is the part where code → logic → real signals → backtestable strategy.
+

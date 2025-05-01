@@ -1,0 +1,156 @@
+Discovering Vectorbt: The Ultimate Tool for Backtesting and Trading Strategy Optimization
+Kevin Meneses González
+InsiderFinance Wire
+Kevin Meneses González
+
+·
+Follow
+
+Published in
+InsiderFinance Wire
+
+·
+5 min read
+·
+Jul 31, 2024
+100
+
+
+
+
+
+
+
+Trading Optimization with Vectorbt
+Introduction
+In the realm of algorithmic trading, having a powerful tool for backtesting and analyzing strategies is essential. Vectorbt has emerged as one of the most efficient and versatile Python libraries for these purposes. This open-source tool allows traders to test their strategies on historical data, optimize parameters, and conduct detailed portfolio and risk analyses. In this article, we’ll explore the main advantages of Vectorbt, reasons to use it, and how to get started, including examples of its key functionalities.
+
+Main Advantages
+Vectorbt stands out due to several advantages that make it an indispensable tool for traders and data analysts. Below are some of its most notable features:
+
+Complete Vectorization: With its fully vectorized approach, Vectorbt performs massive calculations simultaneously, resulting in superior performance compared to other tools that rely on iterative loops.
+Integration with Pandas: The library is designed to work seamlessly with Pandas, making data manipulation and the application of trading strategies easy and familiar.
+Flexibility and Scalability: Vectorbt allows for the simulation of complex strategies and the optimization of multiple parameters simultaneously. It is ideal for both simple strategy and more sophisticated trading algorithms, including machine learning.
+Why Should You Use It?
+There are several compelling reasons to consider using Vectorbt in your trading analyses and strategies:
+
+Efficient Strategy Optimization: Vectorbt enables thorough testing of various parameter configurations, helping you find the most profitable strategy and reduce risks. This is crucial for maximizing gains and minimizing losses.
+Detailed Risk Analysis: The ability to analyze drawdowns and other risks associated with trading strategies is vital for effectively managing a portfolio. Vectorbt offers advanced tools to identify and mitigate these risks.
+Active Community and Extensive Documentation: With an active community and extensive documentation, Vectorbt is accessible for both beginners and experts, making it easy to learn and troubleshoot issues.
+Performance and Efficiency: Full vectorization and integration with modern technologies enable Vectorbt to handle large datasets efficiently, essential for large-scale analysis.
+How to Install It?
+Installing Vectorbt is straightforward and can be done via pip, Python’s package manager. Ensure you have Python 3.6 or higher installed and follow these steps:
+
+Install Vectorbt:
+pip install vectorbt
+2. Install Yahoo Finance for data query
+
+pip install yfinance
+Let’s go with the fun part, the code examples. We will explore the main functions of vector bt
+
+3 Examples of Functionalities
+Moving Average Crossover Analysis
+A classic example is the moving average crossover analysis. With Vectorbt, you can calculate moving averages and generate buy/sell signals when fast-moving averages cross slow-moving averages.
+import vectorbt as vbt
+import yfinance as yf
+import matplotlib.pyplot as plt
+# Descargar datos históricos
+data = yf.download('AAPL', start='2020-01-01', end='2021-01-01')['Close']
+# Calcular medias móviles
+fast_ma = data.rolling(window=10).mean()
+slow_ma = data.rolling(window=50).mean()
+# Generar señales de compra y venta
+entries = fast_ma > slow_ma
+exits = fast_ma < slow_ma
+# Realizar backtest
+portfolio = vbt.Portfolio.from_signals(data, entries, exits)
+# Mostrar todas las métricas importantes del portafolio
+stats = portfolio.stats()
+print(stats)
+We extracted data from Apple and then created a strategy based on a crossover of 10 and 50 moving averages.
+
+we call de vbt. Portfolio method to simulate the strategy and get stats with portfolio.stats()
+
+
+Backtesting of SMA strategy with vectorBT
+Let’s do some visualizations
+
+# 1. Precio del Activo con Señales de Compra y Venta
+plt.figure(figsize=(14, 7))
+plt.plot(data.index, data, label='Price', color='black')
+plt.plot(data.index, fast_ma, label='10-day MA', color='blue')
+plt.plot(data.index, slow_ma, label='50-day MA', color='red')
+plt.plot(data.index[entries], data[entries], '^', markersize=10, color='green', label='Buy Signal')
+plt.plot(data.index[exits], data[exits], 'v', markersize=10, color='red', label='Sell Signal')
+plt.title('Price of AAPL with Buy and Sell Signals')
+plt.legend()
+plt.show()
+# 2. Curva de Capital (Equity Curve)
+plt.figure(figsize=(14, 7))
+plt.plot(portfolio.value().index, portfolio.value(), label='Portfolio Value', color='purple')
+plt.title('Portfolio Value Over Time')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+# 3. Análisis de Drawdown
+plt.figure(figsize=(14, 7))
+plt.plot(portfolio.drawdown().index, portfolio.drawdown(), label='Drawdown', color='red')
+plt.title('Drawdown Over Time')
+plt.xlabel('Date')
+plt.ylabel('Drawdown')
+plt.legend()
+plt.show()
+we plot the following:
+
+Signals of buy and sell
+Equity Curve
+Dropdown Analysis
+
+Apple SMA strategy backrest
+
+Evolution of Portfolio Value over time
+
+Dropdown curve
+Now I would like to know what are best parameters (SMA values) for the strategy, let’s do it as a simulation
+
+
+Parameter optimization
+For example, in this case, we have the values 29 and 19 for AMZN to optimize the total return metric
+
+here is the code to implement it
+
+import vectorbt as vbt
+import numpy as np
+import matplotlib.pyplot as plt
+# Definir los símbolos de las acciones
+symbols = ["AMZN", "AAPL", "GOOGL"]
+# Descargar los datos de precios
+price = vbt.YFData.download(symbols, missing_index='drop').get('Close')
+# Definir los rangos de ventanas de medias móviles
+windows = np.arange(10, 50)
+# Calcular las combinaciones de medias móviles
+fast_ma, slow_ma = vbt.MA.run_combs(price, window=windows, r=2, short_names=['fast', 'slow'])
+# Generar señales de entrada y salida
+entries = fast_ma.ma_crossed_above(slow_ma)
+exits = fast_ma.ma_crossed_below(slow_ma)
+# Definir las configuraciones del portafolio
+pf_kwargs = dict(size=np.inf, fees=0.001, freq='1D')
+# Construir el portafolio
+pf = vbt.Portfolio.from_signals(price, entries, exits, **pf_kwargs)
+# Mostrar métricas importantes del portafolio
+print(pf.stats())
+# Visualizar el rendimiento total utilizando un mapa de calor
+fig = pf.total_return().vbt.heatmap(
+    x_level='fast_window', y_level='slow_window', slider_level='symbol', symmetric=True,
+    trace_kwargs=dict(colorbar=dict(title='Total return', tickformat='%'))
+)
+fig.show()
+Conclusion
+We learn a lot about Backtesting using VectorBT, mainly
+
+How to backtest a trading strategy
+Get key statistics (dropdown, return, win rate, Sharpe ratio)
+Visualization of key metrics
+Optimization of strategy parameters
+Dynamic visualization of the optimization strategy parameters

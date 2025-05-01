@@ -1,0 +1,180 @@
+🧰 The Beginner's Blueprint to Day Trading with Python
+Part 3: Tools of the Trade — Python Libraries You’ll Actually Use
+✦ Why Python?
+Python is beloved by traders for the same reason it’s loved by scientists, ML engineers, and data nerds:
+
+Simple syntax
+
+Giant ecosystem
+
+Rock-solid libraries for stats, finance, plotting, automation
+
+It’s readable, fast to prototype, and powerful under the hood
+
+And we’re going to exploit every bit of that.
+
+🧱 Let’s Build Your Core Stack
+Install this base toolkit from your terminal or WSL:
+
+bash
+Copy
+Edit
+pip install yfinance pandas numpy matplotlib plotly streamlit scikit-learn vaderSentiment zipline-reloaded pyfolio
+Here’s What Each One Does:
+
+Library	What it does
+yfinance	Pulls historical & live market data from Yahoo Finance
+pandas/numpy	The go-to tools for handling tabular data and calculations
+matplotlib	Basic plotting (we’ll mostly use plotly, but still useful)
+plotly	Fancy, interactive charts (candles, overlays, etc.)
+streamlit	Turns your scripts into slick, interactive trading dashboards
+sklearn	Machine learning and error metrics for evaluation
+vaderSentiment	Natural language processing to gauge news sentiment
+zipline-reloaded	Backtesting engine to simulate strategies on historical data
+pyfolio	Portfolio performance/risk visualization from backtests
+🐍 Make Your Workspace Nice
+Project folder layout suggestion (optional but clean af):
+
+kotlin
+Copy
+Edit
+daytrader_tutorial/
+├── core_concepts/
+│   ├── candlestick_plot.py
+│   └── indicator_overlay.py
+├── data/
+├── strategies/
+├── dashboards/
+├── backtests/
+├── bots/
+└── README.md
+Each part of this tutorial will give you fully self-contained .py files to drop into folders like core_concepts/, backtests/, or strategies/.
+
+🕸️ Fetching Data with yfinance
+Let’s pull some real stock data and get familiar with the format.
+
+Save as:
+📄 core_concepts/fetch_data.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+
+# Get daily data for AAPL over the last 6 months
+ticker = 'AAPL'
+data = yf.download(ticker, period='6mo', interval='1d')
+
+print(data.head())
+This gives you a DataFrame with:
+
+mathematica
+Copy
+Edit
+               Open    High     Low   Close  Adj Close     Volume
+Date                                                            
+2023-10-19  173.30  175.27  172.99  174.91      174.91   50476600
+2023-10-20  174.98  175.75  171.96  172.88      172.88   53022000
+...
+Let’s now plot the closing price using plotly:
+
+📄 core_concepts/plot_closing.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import plotly.express as px
+
+data = yf.download("AAPL", period="6mo", interval="1d")
+fig = px.line(data, x=data.index, y='Close', title='AAPL Closing Price')
+fig.show()
+📊 Streamlit: Your First Trading Dashboard
+Create a fast dashboard you can run locally.
+
+📄 dashboards/aapl_dashboard.py
+
+python
+Copy
+Edit
+import streamlit as st
+import yfinance as yf
+import plotly.graph_objects as go
+
+st.title("📈 AAPL Mini Dashboard")
+
+# Get data
+data = yf.download("AAPL", period="3mo", interval="1d")
+
+# Plot candlesticks
+fig = go.Figure()
+fig.add_trace(go.Candlestick(
+    x=data.index,
+    open=data['Open'],
+    high=data['High'],
+    low=data['Low'],
+    close=data['Close']
+))
+
+fig.update_layout(xaxis_rangeslider_visible=False)
+
+st.plotly_chart(fig, use_container_width=True)
+Run with:
+
+bash
+Copy
+Edit
+streamlit run dashboards/aapl_dashboard.py
+💡 You’ll get an interactive browser-based dashboard. Want to add an RSI/EMA selector or sentiment feed? We’ll wire those in soon.
+
+📰 Real-Time News + Sentiment
+Want to read the news and see if it’s bullish or bearish?
+
+📄 core_concepts/sentiment_news.py
+
+python
+Copy
+Edit
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+analyzer = SentimentIntensityAnalyzer()
+
+sample_headlines = [
+    "Apple stock jumps 5% after strong iPhone sales",
+    "Investors worry about Fed rate hikes",
+    "Tesla faces new competition from Rivian"
+]
+
+for headline in sample_headlines:
+    sentiment = analyzer.polarity_scores(headline)
+    print(f"{headline} → {sentiment['compound']:.3f}")
+compound > 0.05 → Positive
+
+compound < -0.05 → Negative
+
+Between → Neutral
+
+Later we’ll grab live headlines from Yahoo Finance using scraping/APIs and visualize rolling sentiment over time.
+
+✦ Toolchain Recap
+By now, you should be able to:
+
+Pull stock data using yfinance
+
+Plot interactive price charts using plotly
+
+Create a basic dashboard with streamlit
+
+Measure sentiment from text using vaderSentiment
+
+✦ Coming Up Next: Naive Strategies and Forecasting
+In Part 4, we’ll get analytical:
+
+Build a naive price prediction model (using yesterday’s close)
+
+Evaluate it using RMSE, MAE, R²
+
+Plot predictions vs real prices
+
+Prove that “simple” can beat nothing — and benchmark future strategies against it

@@ -1,0 +1,448 @@
+Outlier detection and removal in Python
+A step-by-step beginner’s guide to outlier detection in static and time-series dataset
+Nivedita Bhadra
+Nivedita Bhadra
+
+·
+Follow
+
+11 min read
+·
+Aug 15, 2024
+141
+
+
+2
+
+
+
+
+
+In statistics, an outlier is a data point that significantly deviates from other observations. It can be a result of an experimental error. However, it can also be an indication of an exciting possibility. It can come from genuine extreme observations as well. In both cases, if not handled appropriately it can cause serious problems in statistical analysis and interpretation of a statistical test. The presence of outliers can influence the assumptions of normality, linearity, and homoscedasticity in a dataset, leading to unreliable conclusions. We will discuss this in the later section of this article.
+
+
+Image created by author(Displaying outlier points with boxplot and swarmplot)
+Example scenario:
+Suppose we are monitoring the temperature in a server room to ensure it stays within a safe range, typically between 18°C and 24°C, to prevent overheating of the servers.
+
+Under normal circumstances, the temperature readings might look something like this 18°C, 18°C, 21°C, 20°C, 23°C, etc. Now let’s see what different types of outliers can appear while tracking the temperatures of the room and also observe if there is a possibility of observation where deviated datapoints area genuine observations or a mere experimental/measurement error.
+
+1. Sudden Spike in Temperature due to air conditioning unit failure (Contextual Outlier):
+One of the air conditioning units fails temporarily, causing a rapid increase in room temperature for a brief period. The temperature reading looks like 21.2°C, 21.1°C, 30.0°C, 29.5°C, 21.3°C, 21.1°C. If this spike is not identified as an outlier, it might suggest that the room occasionally reaches unsafe temperatures, potentially triggering unnecessary alarms. This is an example of a contextual outlier in the reading.
+
+2. Faulty Sensor Reading (Global Outlier):
+The temperature sensor malfunctions, producing an erroneous reading far outside the expected range. The sensor records a temperature of -5°C, which is not practically possible in the room. The reading looks like this: 21.2°C, 21.1°C, 30.0°C, -5°C, 21.3°C, 21.1°C. If this outlier is not removed, it could distort the average temperature calculation, leading to inaccurate reports. This type of error is known as global outlier.
+
+2. Temperature Drop Due to Open Window (Contextual Outlier):
+Another example of a contextual outlier might appear when e.g., a window is accidentally left open during a cold night, causing the room temperature to drop significantly. The temperature drops to 10°C for a short period before the window is closed and the temperature returns to normal. The reading looks like this: 21.2°C, 21.1°C, 10.0°C, 10.5°C, 21.3°C, 21.1°C. This drop could be misinterpreted as a cooling system issue or a fault in temperature control, leading to unnecessary maintenance checks.
+
+3. Consistent Temperature Fluctuations (Collective Outliers):
+The room’s cooling system becomes unstable, causing regular but significant fluctuations in temperature. The temperature fluctuates between 18°C and 28°C every few minutes. The reading looks like this: 21.2°C, 21.1°C, 28.0°C, 18.5°C, 26.3°C, 18.1°C, ...These fluctuations might not be outliers when looked at individually, but as a collective pattern, they indicate an issue with the cooling system. Ignoring these collective outliers could lead to server damage due to inadequate temperature control.
+
+In the realm of data science, there are several standard methods to detect and remove them before proceeding with any further analysis. We will discuss some of the methods on both static and time-series data.
+
+We will discuss the following methods:
+
+Z-score method
+2.Interquartile Range (IQR) Method
+Isolation Forest
+DBSCAN
+Outlier detection and removal in a static dataset (iris dataset)
+Let’s start the analysis with the iris dataset.
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+from sklearn.datasets import load_iris
+import matplotlib.pyplot as plt
+
+# Load the iris dataset
+iris = load_iris()
+data = pd.DataFrame(iris.data, columns=iris.feature_names)
+Z-Score Method
+The Z-score method identifies outliers by measuring how many standard deviations a data point is from the mean. This method is most effective when the data is normally distributed.
+
+# Calculate Z-scores
+z_scores = np.abs(stats.zscore(data))
+threshold = 3
+outliers = np.where(z_scores > threshold)
+
+# Remove outliers
+data_zs = data[(z_scores < threshold).all(axis=1)]
+
+print("Data shape before outlier removal:", data.shape)
+print("Data shape after outlier removal (Z-Score):", data_zs.shape)
+# Visualization
+plt.figure(figsize=(12, 6))
+plt.scatter(data.iloc[:, 0], data.iloc[:, 1], color='blue', label='Original Data')
+plt.scatter(data_zs.iloc[:, 0], data_zs.iloc[:, 1], color='red', label='Data without Outliers (Z-Score)')
+plt.xlabel(iris.feature_names[0])
+plt.ylabel(iris.feature_names[1])
+plt.title('Z-Score Method for Outlier Detection')
+plt.legend()
+plt.show()
+
+Interquartile Range (IQR) Method
+This is one of the simplest and most widely used methods to identify outliers in a dataset. The IQR method identifies outliers by looking at the spread of the middle 50% of the data.
+
+# Calculate Q1 (25th percentile) and Q3 (75th percentile)
+Q1 = data.quantile(0.25)
+Q3 = data.quantile(0.75)
+IQR = Q3 - Q1
+
+# Identify outliers
+outliers = ((data < (Q1 - 1.5 * IQR)) | (data > (Q3 + 1.5 * IQR))).any(axis=1)
+
+# Remove outliers
+data_iqr = data[~outliers]
+
+print("Data shape before outlier removal:", data.shape)
+print("Data shape after outlier removal (IQR):", data_iqr.shape)
+
+
+# Visualization
+plt.figure(figsize=(12, 6))
+plt.scatter(data.iloc[:, 0], data.iloc[:, 1], color='blue', label='Original Data')
+plt.scatter(data_iqr.iloc[:, 0], data_iqr.iloc[:, 1], color='red', label='Data without Outliers (IQR)')
+plt.xlabel(iris.feature_names[0])
+plt.ylabel(iris.feature_names[1])
+plt.title('IQR Method for Outlier Detection')
+plt.legend()
+plt.show()
+
+Isolation Forest
+Isolation Forest is an algorithm specifically designed to detect outliers.
+
+from sklearn.ensemble import IsolationForest
+
+# Initialize the model
+iso_forest = IsolationForest(contamination=0.1)
+
+# Fit the model
+outliers = iso_forest.fit_predict(data)
+
+# Remove outliers
+data_if = data[outliers == 1]
+
+print("Data shape before outlier removal:", data.shape)
+print("Data shape after outlier removal (Isolation Forest):", data_if.shape)
+
+# Visualization
+plt.figure(figsize=(12, 6))
+plt.scatter(data.iloc[:, 0], data.iloc[:, 1], color='blue', label='Original Data')
+plt.scatter(data_if.iloc[:, 0], data_if.iloc[:, 1], color='red', label='Data without Outliers (Isolation Forest)')
+plt.xlabel(iris.feature_names[0])
+plt.ylabel(iris.feature_names[1])
+plt.title('Isolation Forest for Outlier Detection')
+plt.legend()
+plt.show()
+
+DBSCAN (Density-Based Spatial Clustering of Applications with Noise)
+This method can reveal clusters of arbitrary shape and identify outliers as points that do not belong to any cluster ([See this research article]). This method is efficient in handling noise in the dataset.
+
+from sklearn.cluster import DBSCAN
+
+# Initialize the model
+dbscan = DBSCAN(eps=0.5, min_samples=5)
+
+# Fit the model
+clusters = dbscan.fit_predict(data)
+
+# Identify outliers (points labeled as -1 are outliers)
+outliers = clusters == -1
+
+# Remove outliers
+data_dbscan = data[~outliers]
+
+print("Data shape before outlier removal:", data.shape)
+print("Data shape after outlier removal (DBSCAN):", data_dbscan.shape)
+
+
+# Visualization
+plt.figure(figsize=(12, 6))
+plt.scatter(data.iloc[:, 0], data.iloc[:, 1], color='blue', label='Original Data')
+plt.scatter(data_dbscan.iloc[:, 0], data_dbscan.iloc[:, 1], color='red', label='Data without Outliers (DBSCAN)')
+plt.xlabel(iris.feature_names[0])
+plt.ylabel(iris.feature_names[1])
+plt.title('DBSCAN for Outlier Detection')
+plt.legend()
+plt.show()
+
+Outlier detection for time-series dataset
+Unlike static data, time series data has a temporal order where each data point is related to its past and future values. This temporal dependency means that an outlier in a time series is not just a single isolated point but can affect the subsequent data points, making detection more complex and tricky. Time series data often exhibits seasonality and trends. These patterns can sometimes make it difficult to distinguish between a genuine seasonal peak and an outlier. A 35°C can be a normal data point in summer but an outlier in winter, an example of a contextual outlier. It is hard to set static thresholds for outlier detection in time series as time series is a dynamic dataset.
+
+We will discuss some popular techniques to identify and remove outliers on a synthetic time-series dataset in the following section. Som ecommon methods are
+
+Rolling statistics
+Seasonal Decomposition
+Prophet
+Isolation Forest
+ARIMA
+Creating a Sample Time Series Dataset
+Let’s start by creating a synthetic time series dataset with seasonality, trend, and injected outliers.
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Generate a date range (e.g., daily data for one year)
+date_range = pd.date_range(start='2023-01-01', periods=365, freq='D')
+
+# Generate synthetic data (e.g., daily temperatures with some noise)
+np.random.seed(42)  # For reproducibility
+data = 20 + 10 * np.sin(2 * np.pi * date_range.dayofyear / 365) + np.random.normal(0, 2, len(date_range))
+# Create a DataFrame
+df = pd.DataFrame({'Date': date_range, 'Value': data})
+df.set_index('Date', inplace=True)  # Set the date range as the index
+# Plot the time series
+plt.figure(figsize=(15, 5))
+plt.plot(df.index, df['Value'], label='Synthetic Time Series')
+plt.title('Synthetic Time Series Data')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+Image created by author
+# Ensure data is a NumPy array
+data = np.array(data)
+# Add outliers
+outlier_indices = np.random.choice(len(data), size=5, replace=False)  # Randomly select 5 indices
+
+# Modify the NumPy array directly
+data_with_outliers = data.copy()  # Create a copy of data to avoid modifying in place
+
+# Add outliers by adding large anomalies to the selected indices
+data_with_outliers[outlier_indices] = data_with_outliers[outlier_indices] + np.random.normal(15, 5, size=outlier_indices.shape[0])
+
+# Create DataFrame
+df = pd.DataFrame({'Date': date_range, 'Value': data_with_outliers})
+df.set_index('Date', inplace=True)
+
+# Visualize the original time series
+plt.figure(figsize=(15,5))
+plt.plot(df.index, df['Value'], label='Time Series Data')
+plt.title('Synthetic Time Series Data with Outliers')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+Image created by author
+Rolling Statistics
+This method calculates rolling statistics (e.g., rolling mean and standard deviation) and identifies outliers based on deviations from these statistics.
+
+The following code snippet shows how to remove outliers by computing rolling statistics of the time-series data.
+
+# Calculate rolling statistics
+window_size = 15
+rolling_mean = df['Value'].rolling(window=window_size).mean()
+rolling_std = df['Value'].rolling(window=window_size).std()
+
+# Define threshold (e.g., 3 standard deviations)
+threshold = 3
+
+# Identify outliers
+outliers = df[np.abs(df['Value'] - rolling_mean) > threshold * rolling_std]
+
+# Visualize the results
+plt.figure(figsize=(15,5))
+plt.plot(df.index, df['Value'], label='Original Data')
+plt.plot(df.index, rolling_mean, color='orange', label='Rolling Mean')
+plt.scatter(outliers.index, outliers['Value'], color='red', label='Detected Outliers')
+plt.title('Outlier Detection using Rolling Statistics')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+Image created by the author
+
+Image created by the author
+Seasonal Decomposition
+Using seasonal decomposition, we break down the time series into trend, seasonality, and residual components. Outliers are often visible in the residual component.
+
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+# Apply seasonal decomposition
+decomposition = seasonal_decompose(df['Value'], model='additive', period=30)
+
+# Plot decomposed components
+fig = decomposition.plot()
+fig.set_size_inches(15, 8)
+plt.show()
+
+# Extract residuals and identify outliers using Z-score
+residual = decomposition.resid.dropna()
+z_scores = np.abs((residual - residual.mean()) / residual.std())
+outliers_decomp = residual[z_scores > 3]
+
+# Visualize the results
+plt.figure(figsize=(15,5))
+plt.plot(df.index, df['Value'], label='Original Data')
+plt.scatter(outliers_decomp.index, df.loc[outliers_decomp.index]['Value'], color='red', label='Detected Outliers')
+plt.title('Outlier Detection using Seasonal Decomposition')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+The following plot shows the different components of the synthetic dataset.
+
+
+Image created by the author
+
+Image created by the author
+
+Image created by the author
+Prophet
+Prophet is an open-source time series forecasting tool developed by Facebook ([See this GitHub page]). It’s designed to handle data with strong seasonal patterns and multiple seasons of historical data. It is a powerful tool that models seasonality and trend, and can be used for anomaly detection by comparing actual values against predicted values ([Reference article]). below is a code snippet to show how this method can be implemented to remove outliers.
+
+from prophet import Prophet
+
+# Prepare the data for Prophet
+df_prophet = df.reset_index().rename(columns={'Date': 'ds', 'Value': 'y'})
+
+# Fit the Prophet model
+model = Prophet()
+model.fit(df_prophet)
+
+# Create a dataframe with future dates for prediction (not necessary here)
+future = model.make_future_dataframe(periods=0)
+forecast = model.predict(future)
+
+# Calculate residuals
+df_prophet['yhat'] = forecast['yhat']
+df_prophet['residual'] = df_prophet['y'] - df_prophet['yhat']
+
+# Identify anomalies (3 standard deviations away from the mean)
+std_residual = np.std(df_prophet['residual'])
+threshold = 3 * std_residual
+df_prophet['anomaly'] = df_prophet['residual'].apply(lambda x: 1 if np.abs(x) > threshold else 0)
+
+# Extract anomalies
+anomalies_prophet = df_prophet[df_prophet['anomaly'] == 1]
+
+# Visualize the results
+plt.figure(figsize=(15,5))
+plt.plot(df_prophet['ds'], df_prophet['y'], label='Actual')
+plt.plot(df_prophet['ds'], df_prophet['yhat'], label='Predicted')
+plt.scatter(anomalies_prophet['ds'], anomalies_prophet['y'], color='red', label='Anomalies')
+plt.title('Anomaly Detection using Prophet')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+Image created by author
+
+Isolation Forest
+Isolation Forest is an unsupervised machine learning (scikit-learn documentation page) algorithm that’s particularly effective for anomaly detection, including in time series data. The algorithm works by randomly selecting a feature and then randomly selecting a split value between the maximum and minimum values of the selected feature. The logic behind it is that outliers are more likely to be isolated earlier in the random partitioning process than normal points ([See this research article]) .
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.ensemble import IsolationForest
+
+
+# Reshape the data to 2D array (required by IsolationForest)
+X = df['Value'].values.reshape(-1, 1)
+
+# Apply Isolation Forest
+iso_forest = IsolationForest(contamination=0.01, random_state=42)
+df['Anomaly'] = iso_forest.fit_predict(X)
+
+# Anomalies are labeled as -1, normal points as 1
+outliers = df[df['Anomaly'] == -1]
+normal_data = df[df['Anomaly'] == 1]
+
+# Remove the outliers
+df_cleaned = df[df['Anomaly'] == 1]
+
+# Plot the original time series with detected outliers
+plt.figure(figsize=(15, 5))
+plt.plot(df.index, df['Value'], label='Original Data with Outliers')
+plt.scatter(outliers.index, outliers['Value'], color='red', label='Detected Outliers')
+plt.title('Outlier Detection with Isolation Forest')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+# Plot the cleaned time series after removing outliers
+plt.figure(figsize=(15, 5))
+plt.plot(df_cleaned.index, df_cleaned['Value'], label='Cleaned Data (Outliers Removed)')
+plt.title('Time Series Data after Outlier Removal using Isolation Forest')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+Image created by author
+
+Image created by the author
+ARIMA
+ARIMA (AutoRegressive Integrated Moving Average) is a widely used statistical method for time series forecasting, and it can be used to detect and remove outliers by analyzing the residuals (the difference between the actual values and the predicted values).
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+from scipy import stats
+
+# Fit an ARIMA model
+model = ARIMA(df['Value'], order=(5, 1, 0))  # Here (5, 1, 0) are the ARIMA parameters, adjust as needed
+model_fit = model.fit()
+
+# Get the residuals from the model
+df['Residuals'] = model_fit.resid
+
+# Plot residuals
+plt.figure(figsize=(15, 5))
+plt.plot(df.index, df['Residuals'], label='Residuals')
+plt.axhline(y=0, color='red', linestyle='--')
+plt.title('Residuals from ARIMA Model')
+plt.xlabel('Date')
+plt.ylabel('Residuals')
+plt.legend()
+plt.show()
+
+# Detect outliers using Z-score
+z_scores = np.abs(stats.zscore(df['Residuals']))
+df['Outlier'] = z_scores > 3  # Mark as outlier if Z-score is greater than 3
+
+# Remove the outliers
+df_cleaned = df[df['Outlier'] == False]
+
+# Plot the original time series with detected outliers
+plt.figure(figsize=(15, 5))
+plt.plot(df.index, df['Value'], label='Original Data with Outliers')
+plt.scatter(df[df['Outlier']].index, df[df['Outlier']]['Value'], color='red', label='Detected Outliers')
+plt.title('Outlier Detection with ARIMA Residual Analysis')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+# Plot the cleaned time series after removing outliers
+plt.figure(figsize=(15, 5))
+plt.plot(df_cleaned.index, df_cleaned['Value'], label='Cleaned Data (Outliers Removed)')
+plt.title('Time Series Data after Outlier Removal using ARIMA Residuals')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+Image created by the author
+
+Image created by the author
+These are some of the popular methods one can try to detect and remove outliers before further data analysis. There are many intuitive articles on this topic.
+
+Reference articles:
+
+A Review on Outlier/Anomaly Detection in Time Series Data
+
+Evaluation of outlier detection estimators
+
+Anomaly Detection Principles and Algorithms
+
+Thank you for reading!

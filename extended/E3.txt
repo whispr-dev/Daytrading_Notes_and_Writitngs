@@ -1,0 +1,148 @@
+Chapter 3: Using Macroeconomic Indicators from FRED for Forecasting
+Most trading models rely solely on price/volume — but real macro shifts can trigger everything from breakouts to crashes. Inflation, rates, employment — these shape the very regimes we trade within.
+
+So let’s build a system to:
+
+Pull economic indicators from the FRED API
+
+Clean + prep them for modeling
+
+Integrate into our ML pipelines (exogenous features)
+
+Enable regime-aware prediction
+
+📡 Getting Free Macro Data with the FRED API
+FRED (Federal Reserve Economic Data) is a goldmine of clean, trusted economic indicators — and it's free.
+
+Step 1: Get an API Key
+fred.stlouisfed.org/docs/api/api_key.html
+
+Then save it in a .env file:
+
+dotenv
+Copy
+Edit
+API_KEY=your_api_key_here
+🔄 Fetching Data in Python
+We query the API for all daily indicators, then download CSVs:
+
+fred_fetch.py
+python
+Copy
+Edit
+import requests
+import pandas as pd
+import os
+from dotenv import load_dotenv
+from io import StringIO
+
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
+
+def get_daily_series(api_key):
+    url = "https://api.stlouisfed.org/fred/tags/series"
+    params = {
+        "api_key": api_key,
+        "tag_names": "daily",
+        "file_type": "json",
+        "limit": 1000,
+        "offset": 0
+    }
+    series = []
+    while True:
+        resp = requests.get(url, params=params).json()
+        chunk = resp.get("seriess", [])
+        if not chunk:
+            break
+        series += chunk
+        params["offset"] += params["limit"]
+    return [s["id"] for s in series]
+
+series_ids = get_daily_series(API_KEY)
+We now have a list of ~1750+ economic indicators (daily).
+
+📥 Downloading Series CSVs
+Now fetch the actual data:
+
+python
+Copy
+Edit
+def fetch_series_csv(series_id, start="2014-10-01", end="2024-09-05"):
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}&cosd={start}&coed={end}"
+    r = requests.get(url)
+    if r.status_code == 200:
+        df = pd.read_csv(StringIO(r.text))
+        df.columns = ['ds', 'value']
+        df['unique_id'] = series_id
+        return df.dropna()
+    return None
+Save each one:
+
+python
+Copy
+Edit
+os.makedirs("data", exist_ok=True)
+for sid in series_ids:
+    df = fetch_series_csv(sid)
+    if df is not None:
+        df.to_csv(f"data/{sid}.csv", index=False)
+🧼 Standardizing for NeuralForecast
+NeuralForecast models expect:
+
+
+Column	Meaning
+ds	Datestamp (e.g., 2024-04)
+y	Value
+unique_id	Identifier for the series
+Example merge for GDP, CPI, and Unemployment:
+
+python
+Copy
+Edit
+files = ["GDP.csv", "CPI.csv", "UNRATE.csv"]
+dfs = [pd.read_csv(f"data/{f}") for f in files]
+macro_df = pd.concat(dfs)
+🧠 Feature Engineering: Lag & Diff
+Transform to stationarized format:
+
+python
+Copy
+Edit
+macro_df['value'] = macro_df.groupby('unique_id')['value'].pct_change()
+macro_df = macro_df.dropna()
+Or use log_diff, z-score normalization, etc.
+
+🧪 Forecast with Macroeconomic Exog Features
+Train models like PatchTST or XGBoost using this macro_df as input:
+
+python
+Copy
+Edit
+from neuralforecast import NeuralForecast
+from neuralforecast.models import PatchTST
+
+model = PatchTST(
+    h=1,
+    input_size=12,
+    futr_exog_list=['CPI', 'GDP', 'UNRATE']
+)
+
+nf = NeuralForecast(models=[model], freq='M')
+nf.fit(df=target_df, futr_df=macro_df)
+Boom: now your model adapts to macro shifts, not just candles.
+
+🧭 Regime-Aware Trading
+With macro data, you can:
+
+Classify market regimes with PCA + clustering
+
+Detect shifts early (e.g., recession warnings)
+
+Weight trades by inflation-adjusted indicators
+
+Create logic like: “Buy tech only when CPI falls AND GDP rises”
+
+This opens up massive edges in swing and position trading.
+
+🧠 Coming Up…
+With macro data in place, we’re now ready to simulate the uncertainty of the market itself. In the next chapter, we’ll run Monte Carlo simulations to test how robust our strategies are across thousands of randomized futures.

@@ -1,0 +1,67 @@
+Building the Ultimate Trading Data Pipeline — Bonus: Weekly data aggregation
+Xavier Escudero
+Quant Factory
+Xavier Escudero
+
+·
+Follow
+
+Published in
+Quant Factory
+
+·
+3 min read
+·
+Jan 9, 2024
+55
+
+
+
+
+
+
+
+Trading strategies use different timeframes for several reasons, and the choice of timeframe depends on the trader’s or investor’s objectives, risk tolerance, and trading style.
+
+In this article, we will generate a materialized view named weekly_bars from the daily_bars table, allowing for adaptable trading analysis across different timeframes.
+
+Continuous aggregates, such as those offered by Timescale, enhance query performance on extensive datasets. By utilizing PostgreSQL materialized views, these aggregates refresh queries incrementally in the background, ensuring that only changed data is computed, not the entire dataset.
+
+The objective is to condense daily OHLCV data into weekly bars, employing the following computation:
+
+week_open: Retrieve the initial (opening) value of the open price for each week.
+week_high: Obtain the highest (max) value among all the high prices within each week.
+week_low: Acquire the lowest (min) value among all the low prices within each week.
+week_close: Extract the final value of the close for each week.
+week_volume: Sum the total volume of trades within each week to gauge the overall market activity during that period.
+We can establish a weekly_barsmaterialized view through the following execution:
+
+CREATE MATERIALIZED VIEW weekly_bars 
+WITH (timescaledb.continuous) AS
+SELECT
+  symbol,
+  time_bucket(INTERVAL '1 week', date) AS week_start,
+  first(open, date) AS week_open,
+  max(high) AS week_high,
+  min(low) AS week_low,
+  last(close, date) AS week_close,
+  sum(volume) AS week_volume
+FROM daily_bars
+GROUP BY symbol, week_start
+ORDER BY symbol, week_start;
+We generate a materialized view accessible, for instance, through PgAdmin, enabling the execution of queries:
+
+
+You can achieve a similar outcome if you require alternative timeframes.
+
+I drew inspiration from the page How We Made Data Aggregation Better and Faster on PostgreSQL With TimescaleDB 2.7
+
+👏 Did you like the story? Give 1 to 50 claps to show your support! Your claps really helps me out and motivates me to keep creating valuable content. Thank you for your support! 👏
+
+
+Thank you for being part of our community! Before you go:
+
+If you liked the story feel free to clap 👏 and follow the author.
+Learn How To Develop Your Trading Bots 👉 here.
+Join our Premium Discord Server👉 here.
+*Note that this article does not provide personal investment advice and I am not a qualified licensed investment advisor. All information found here is for entertainment or educational purposes only and should not be construed as personal investment advice.

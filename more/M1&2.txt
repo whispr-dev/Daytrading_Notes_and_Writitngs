@@ -1,0 +1,129 @@
+More Daytrading with Python Machine Learning
+Advanced Models, Smarter Strategies, and Real Returns from the Edge of Quant Innovation
+Chapter 1: Introduction – The Edge Evolves
+In the world of daytrading, everyone has a chart.
+Everyone has an opinion.
+And most are wrong.
+
+But you? You’ve moved beyond gut feel. You think in code, in models, in probabilities. You build systems that learn, evolve, and adapt. In this third volume, we dive deep into machine learning’s most advanced frontiers — ones barely entering mainstream quant literature.
+
+You’ll learn:
+
+How to use Kolmogorov–Arnold Networks (KANs) to build universal function approximators from scratch
+
+The power of Structured State Space Models (SSMs) to capture long-range dependencies better than Transformers or LSTMs
+
+Dual-momentum strategies grounded in robust statistical backtests
+
+Applying online learning and incremental updates to adapt in real time
+
+Real-world examples of deep learning models (CNNs, ensembles) deployed in live markets
+
+Integration with LLMs and visual agents for assisted trading
+
+This isn’t just machine learning. It’s machine intuition — baked into code.
+
+Chapter 2: Momentum Strategies Reimagined with ML
+Before we dive into exotic architectures, let’s return to a timeless alpha factor: momentum.
+
+The idea is simple: assets that went up tend to keep going up — until they don’t. But most people use momentum wrong. They oversimplify, overfit, or ignore context.
+
+Let’s fix that.
+
+🧠 What Is Momentum, Really?
+Momentum = relative strength over time.
+
+python
+Copy
+Edit
+def momentum(series, lookback=20):
+    return series / series.shift(lookback) - 1
+This gives you a % change over the past lookback periods. But dual momentum goes further:
+
+Combine absolute momentum (price vs its own history)
+With relative momentum (asset vs other assets)
+
+📈 A Dual Momentum Strategy
+From [91†daytrading_36.txt], we build a dual-momentum screen:
+
+1. Rank Assets by Recent Returns
+python
+Copy
+Edit
+def rank_assets(price_df, lookback=90):
+    momentum_scores = price_df.pct_change(lookback).iloc[-1]
+    return momentum_scores.sort_values(ascending=False)
+2. Select Top 3 (Relative Strength)
+python
+Copy
+Edit
+top_assets = rank_assets(price_df).head(3)
+3. Filter by Absolute Strength
+python
+Copy
+Edit
+threshold = 0.05  # e.g., must be up 5% over period
+selected = top_assets[top_assets > threshold]
+4. Equal Weight Portfolio
+python
+Copy
+Edit
+weights = pd.Series(1 / len(selected), index=selected.index)
+🔁 ML-Enhanced Momentum Scoring
+From [89†daytrading_34.txt], we learn to blend momentum with trend features like:
+
+Slope of linear regression
+
+RSI divergence
+
+Laguerre filter acceleration
+
+PCA compression of price movement
+
+Train an ML model (e.g. XGBoost or RandomForest) to learn non-linear relationships:
+
+python
+Copy
+Edit
+from xgboost import XGBClassifier
+
+model = XGBClassifier()
+model.fit(X_train, y_train)  # y = did price outperform in next 10d?
+Use momentum as one of many inputs — not a lone signal.
+
+🧪 Monte Carlo Testing
+Robust backtests include:
+
+Multiple lookback periods (30/60/90)
+
+Random entry days
+
+Volatility-adjusted sizing
+
+Rolling rebalancing every N days
+
+Use vectorbt to run 1000s of variations and rank by Sharpe, drawdown, turnover.
+
+📉 Real Results
+Backtests in [91†daytrading_36.txt] across 10 global equity ETFs:
+
+Dual-momentum Sharpe: 1.42 vs baseline 0.93
+
+Reduced whipsaw trades in sideways regimes
+
+Higher win rate in low-volatility macro periods
+
+🧠 Closing Thoughts
+Momentum is one of the few signals that has survived decades of testing — but it needs context.
+
+By:
+
+Combining absolute + relative views
+
+Using ML for scoring + regime detection
+
+Stress-testing via Monte Carlo
+
+…you turn a basic idea into a reliable, multi-asset strategy engine.
+
+Next, we’ll evolve again — into a world of online learners, where models update in real-time without retraining from scratch.

@@ -1,0 +1,15 @@
+"Even More Daytrading with Python Machine Learning." It builds on the others in tone and depth, covering:
+
+MultiIndex stock dataframes
+
+Linear regression forecasting
+
+Decision trees on imbalanced data
+
+SHAP explainability
+
+HalvingGridSearch & hyperparameter tuning
+
+Outlier removal methods
+
+Deployment and model pipelines

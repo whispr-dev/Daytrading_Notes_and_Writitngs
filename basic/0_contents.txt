@@ -1,0 +1,78 @@
+🧠 The Beginner's Blueprint to Day Trading with Python
+
+Part 1: What Is Day Trading?
+- Definition, goals, and how it differs from investing
+- Risk and reward mindset
+- Why Python is the ultimate sidekick for traders
+
+Part 2: Core Concepts You Gotta Know
+- Stocks, price, and volume (in plain terms)
+- Candlesticks and how they tell a story
+- Indicators: RSI, MACD, EMA, VWAP, etc.
+- Technical vs Fundamental analysis
+- What is a trading strategy?
+
+Part 3: Your Day Trading Toolbox
+- 📦 Libraries
+	yfinance: pulling free market data
+	pandas/numpy: for time series wrangling
+	matplotlib / plotly: visualizing signals
+	sklearn: prediction basics
+	streamlit: building your own interface
+	vaderSentiment: analyzing market sentiment from 	headlines
+
+Part 4: First Code — Naive Models & Price Forecasting
+- Forecasting tomorrow’s price using today’s
+- Full code from daytrading_00.txt (naive LSTM alternative)
+- MAE, RMSE, SMAPE, and other metrics explained with real output
+
+Part 5: Visualizing the Market Like a Pro
+- Candlestick charts with EMA overlays (Streamlit + Plotly)
+- Adding RSI, MACD, volume, sentiment scores
+- Real-time news feed + sentiment from Yahoo headlines
+
+Part 6: Building a Custom Stock Screener
+- Grab S&P 500 list
+- Pull live data for each ticker
+- Categorize by market cap
+- Calculate 52-week high/low proximity
+- Export as Excel with highlights
+- Based on daytrading_01.txt and daytrading_03.txt
+
+Part 7: Quant Basics — Options and Binary Payoffs
+- What’s an option? (with banana stand metaphors if needed)
+- Binary call and put visualized
+- Heaviside step function and payoff graphs
+- Black-Scholes model for binary options with code
+
+Part 8: Algorithmic Trading and Backtesting
+- What’s Zipline? Why use it?
+- Mean Reversion explained visually
+- Full working Zipline backtest
+- Pyfolio integration for risk analysis
+- Cumulative return plots, drawdown analysis, and more
+
+Part 9: Real Automation — Logging in and Placing Trades
+- Automating Fidelity login using pyautogui + Shortkeys
+- Scheduling logic, simulated keypress navigation
+- Security tips for handling credentials
+- Custom strategy examples
+
+Part 10: Putting It All Together — A Trading Bot Blueprint
+- The “Pollen” bot structure (from daytrading_-3.txt)
+- MACD + RSI + VWAP combo logic
+- Risk-adjusted weighting
+- Alpaca API example (how to wire in real brokerage)
+
+Part 11: Strategy Design & Next Steps
+- Why most strategies fail (and how to not fall into the trap)
+- Benchmarking with naive models
+- Logging every decision
+- Visualization of portfolio risk
+- Ethical trading reminders
+
+Appendix:
+- Full working scripts (heavily commented)
+- Toolchain setup instructions
+- Notes on deploying to VPS or local Linux boxes
+

@@ -1,0 +1,176 @@
+🔗 Section 3: Cointegration for Pairs Trading — Beyond Correlation
+✦ What is Cointegration?
+Let’s break it down:
+
+Correlation tells you if two assets move together
+
+Cointegration tells you if two assets move together in a way that their spread stays stable
+
+Even if prices wander wildly, the spread between them might mean-revert
+
+That spread is what you trade.
+
+📈 If stock A and B are cointegrated:
+
+A goes up, B lags behind → Long B, Short A
+
+They “snap back” to their spread mean
+
+✦ Why Not Just Use Correlation?
+Because correlation:
+
+Doesn’t capture long-term equilibrium
+
+Is sensitive to outliers
+
+Breaks down in trending regimes
+
+Cointegration is about shared drift, not just daily co-movement.
+
+This is the real math behind pair trading.
+
+🧪 Step-by-Step: Find a Cointegrated Pair
+We’ll use:
+
+yfinance to fetch data
+
+statsmodels to run the Engle-Granger test
+
+A quick check of the residuals for spread behavior
+
+📄 Cointegration Test Script
+📄 strategies/cointegration_test.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+import statsmodels.api as sm
+from statsmodels.tsa.stattools import coint
+import matplotlib.pyplot as plt
+
+# Download data
+tickers = ['KO', 'PEP']  # Coca-Cola vs Pepsi
+start_date = '2020-01-01'
+df = yf.download(tickers, start=start_date)['Adj Close']
+
+# Drop NaNs and rename
+df = df.dropna()
+s1 = df[tickers[0]]
+s2 = df[tickers[1]]
+
+# Run regression: s1 ~ s2
+X = sm.add_constant(s2)
+model = sm.OLS(s1, X).fit()
+hedge_ratio = model.params[1]
+
+# Calculate spread
+spread = s1 - hedge_ratio * s2
+
+# Plot spread
+plt.figure(figsize=(12, 5))
+spread.plot()
+plt.axhline(spread.mean(), color='r', linestyle='--')
+plt.title(f"Spread: {tickers[0]} - {hedge_ratio:.2f} * {tickers[1]}")
+plt.show()
+
+# Cointegration test
+score, pvalue, _ = coint(s1, s2)
+print(f"p-value: {pvalue:.4f}")
+If p < 0.05, you have cointegration — statistically significant.
+
+📈 What Now?
+That spread can be traded:
+
+Buy spread when it’s below average (expect mean reversion)
+
+Short spread when it’s above average
+
+You monitor the Z-score of the spread:
+
+𝑍
+𝑡
+=
+𝑠
+𝑝
+𝑟
+𝑒
+𝑎
+𝑑
+𝑡
+−
+𝜇
+𝜎
+Z 
+t
+​
+ = 
+σ
+spread 
+t
+​
+ −μ
+​
+ 
+📄 Spread Z-Score Tracker
+📄 strategies/pairs_zscore.py
+
+python
+Copy
+Edit
+lookback = 30
+spread_mean = spread.rolling(lookback).mean()
+spread_std = spread.rolling(lookback).std()
+zscore = (spread - spread_mean) / spread_std
+
+# Plot zscore
+plt.figure(figsize=(12, 4))
+zscore.plot()
+plt.axhline(1, linestyle='--')
+plt.axhline(-1, linestyle='--')
+plt.axhline(0, linestyle='-')
+plt.title(f"{tickers[0]} / {tickers[1]} Z-Score (Spread)")
+plt.show()
+When:
+
+Z < -1: Long spread
+
+Z > +1: Short spread
+
+Z ~ 0: Exit position
+
+💡 Bonus: Run Cointegration Across S&P 500 Pairs
+Use a screener to:
+
+Select stocks from same industry
+
+Run pairwise cointegration tests
+
+Score and rank based on p-value
+
+Then build:
+
+A long-short portfolio of top cointegrated pairs
+
+Run weekly rebalancing using Backtrader or Zipline
+
+✨ Optional Enhancements
+Use Johansen test for multi-asset cointegration (3+ symbols)
+
+Combine with liquidity filters (from last section)
+
+Trade on spread Bollinger Bands
+
+✦ Coming Up Next: XGBoost for Forecasting Alpha
+In Section 4, we’ll:
+
+Forecast returns using XGBoost
+
+Engineer features like RSI, returns, volatility, liquidity
+
+Rank assets based on predicted returns
+
+Build live inference pipelines for stock scoring
+
+This takes you from stats → machine learning.

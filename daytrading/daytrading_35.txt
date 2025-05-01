@@ -1,0 +1,248 @@
+Riding the Waves of Stock Prices with Wavelet Transform Signals in Python
+Towards Unlocking Market Signals for Clearer Trading Insights
+Cristian Velasquez
+Cristian Velasquez
+
+·
+Follow
+
+9 min read
+·
+Sep 11, 2023
+419
+
+
+4
+
+
+
+
+
+
+1. Introduction
+Stocks rise and fall, creating patterns and movements that can feel as unpredictable as ocean waves. Yet, much like how scientists predict the movement of the waves by understanding the currents below, we too can decipher some of the patterns of the stock market with similar tools.
+
+By tapping into the power of the Wavelet Transform, we look beneath the surface, seeking to uncover the deep currents that drive stock prices. This journey is not just about numbers and data; it’s about translating the abstract into the tangible, taking the seemingly erratic behavior of stocks and finding rhythm and reason.
+
+2. Wavelet Transform Theory
+At its core, a wavelet is a brief oscillation that has its energy concentrated in time, ensuring it’s both short-lived and limited in duration. Imagine striking a drum: the sound produced is intense but fades quickly. This ephemeral characteristic of wavelets makes them immensely suitable to analyze financial signals that are non-stationary (i.e., their statistical properties change over time). Wavelet Transform is akin to providing a microscope to view the intricate details of stock data, capturing both its large trends and minute fluctuations.
+
+2.1 Why Not Fourier Transform?
+Many might think, why not just use the Fourier Transform, which is a very popular tool to analyze signals? Fourier Transform breaks down a signal into its constituent sinusoids. However, its Achilles’ heel is its inability to provide both time and frequency information simultaneously. While it can tell us the frequencies present, it’s often oblivious to when they occur. Unlike its Fourier counterpart, Wavelet Transform captures both the frequency and the time, providing a time-frequency representation of the signal.
+
+2.2 The Essence of Wavelet Transform
+Mathematically, the Wavelet Transform can be represented as:
+
+
+Where:
+
+W is the result of our comparison, giving us a measure of similarity.
+f (t) represents our stock data.
+ψ (t) is the chosen wavelet pattern.
+In essence, we’re moving our wavelet ψ across the stock data f(t), looking for places where they align well. This gives us the wavelet coefficients W(b) which tell us how strongly the stock data matches the wavelet at each point in time. Put simply, the better the match at any given point, the higher the value of W.
+
+
+
+On the left, the Continuous Wavelet Transform (CWT) visualizes stock data at different scales, capturing varied time durations. On the right, a Ricker wavelet moves through the stock signal, with its correlation shown below. Together, they spotlight how wavelets localize patterns in stock data, distinguishing short-term fluctuations from long-term trends.
+In the presented visualizations, we see the mechanism of the Wavelet Transform as applied to time series data, such as stock prices. On the left, we see a vivid portrayal of the Continuous Wavelet Transform (CWT) applied to stock data. Each frame of the animation displays wavelet coefficients at a different scale, capturing patterns that exist at varying time durations. Wider wavelets detect longer-term trends, while narrower ones focus on short-term fluctuations.
+
+Beside it, on the right, is a depiction of how a wavelet, in this case, a Ricker wavelet, traverses through the stock signal. As the wavelet slides across, it gets multiplied point-by-point with the stock data, and the resultant values are summed up to produce a single coefficient. This ‘correlation’ is plotted below, with the red dot marking the current coefficient value as the wavelet moves. High peaks in the correlation plot indicate locations where the wavelet aligns well with the stock data, capturing specific patterns. In essence, this process is a systematic approach to unearth local patterns within vast time series data, offering a granular perspective that Fourier Transform might miss.
+
+3. Python Implementation
+We’ll now delve into the Python implementation of the Wavelet Transform for deriving buy/sell signals from stock data which is what might be of interest to traders and Data Scientist. The code employs the Continuous Wavelet Transform to extract features that can indicate potential buy or sell moments in the stock’s historical data.
+
+3.1 Setting up the Environment
+Ensure you have the required Python libraries. If not, they can be installed via pip:
+
+pip install numpy pandas matplotlib yfinance scipy
+3.2 Fetching the Stock Data
+Using the yfinance library, we can easily fetch stock data for analysis:
+
+import yfinance as yf
+
+ticker = "SIE.DE"
+stock_data = yf.download(ticker, start="2018-01-01", end="2023-12-30")
+3.3 Applying the Continuous Wavelet Transform (CWT)
+The scipy library provides the required functions to compute the CWT using the Ricker wavelet:
+
+from scipy import signal
+
+widths = np.arange(1, 15)
+cwt_result = signal.cwt(stock_data['Close'].values, signal.ricker, widths)
+3.4 Extracting Buy and Sell Signals
+From the computed CWT, positive and negative coefficients can be extracted, indicating upward and downward movements in stock price, respectively.
+
+cwt_positive = np.where(cwt_result > 0, cwt_result, 0)
+cwt_negative = np.where(cwt_result < 0, cwt_result, 0)
+
+buy_signal = pd.Series(np.sum(cwt_positive, axis=0), index=stock_data.index)
+sell_signal = pd.Series(-np.sum(cwt_negative, axis=0), index=stock_data.index)
+3.5 Identifying Signal Crossovers
+Crossovers between buy and sell signals can potentially indicate trading opportunities.
+
+cross_above = (buy_signal >= sell_signal) & (buy_signal.shift(1) < sell_signal.shift(1))
+cross_below = (buy_signal <= sell_signal) & (buy_signal.shift(1) > sell_signal.shift(1))
+3.6 Visualization
+A visual representation can provide a clearer perspective on the buy/sell moments against the stock’s historical data:
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(30, 6))
+plt.plot(stock_data.index, stock_data['Close'], label='Close Prices', alpha=0.5)
+plt.scatter(stock_data.index[cross_above], stock_data['Close'][cross_above], label='Buy Signal', marker='^', color='g')
+plt.scatter(stock_data.index[cross_below], stock_data['Close'][cross_below], label='Sell Signal', marker='v', color='r')
+plt.title(f'{ticker} Historical Close Prices with Wavelet Transform Buy and Sell Signals')
+plt.legend()
+plt.show()
+3.7 Complete Python Code
+Putting all the code together we get
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+from scipy import signal
+
+# Download ASML.AS historical stock data
+ticker = "SIE.DE"
+stock_data = yf.download(ticker, start="2018-01-01", end="2023-12-30")
+
+# Compute the Continuous Wavelet Transform (CWT) using the Ricker wavelet
+widths = np.arange(1, 15)
+cwt_result = signal.cwt(stock_data['Close'].values, signal.ricker, widths)
+
+# Extract the relevant CWT coefficients for analysis
+cwt_positive = np.where(cwt_result > 0, cwt_result, 0)
+cwt_negative = np.where(cwt_result < 0, cwt_result, 0)
+
+# Calculate the buy and sell signals from the CWT coefficients
+buy_signal = pd.Series(np.sum(cwt_positive, axis=0), index=stock_data.index)
+sell_signal = pd.Series(-np.sum(cwt_negative, axis=0), index=stock_data.index)
+
+# Identify buy and sell signal crossovers
+cross_above = (buy_signal >= sell_signal) & (buy_signal.shift(1) < sell_signal.shift(1))
+cross_below = (buy_signal <= sell_signal) & (buy_signal.shift(1) > sell_signal.shift(1))
+
+# Plot the stock prices and buy/sell signals
+plt.figure(figsize=(30, 6))
+plt.plot(stock_data.index, stock_data['Close'], label='Close Prices', alpha=0.5)
+plt.scatter(stock_data.index[cross_above], stock_data['Close'][cross_above], label='Buy Signal', marker='^', color='g')
+plt.scatter(stock_data.index[cross_below], stock_data['Close'][cross_below], label='Sell Signal', marker='v', color='r')
+plt.title(f'{ticker} Historical Close Prices with Wavelet Transform Buy and Sell Signals')
+plt.legend()
+plt.show()
+
+Visualization of historical close prices for SIE.DE from 2018 to 2023, with Wavelet Transform-derived buy (green upward-pointing triangles) and sell (red downward-pointing triangles) signals using a basic CWT approach.
+3.7 Bonus — Optimized Parameters
+While the wavelet transform offers an innovative approach to analyzing stock data and generating buy/sell signals, its effectiveness hinges largely on the choice of parameters: the width of the wavelets and the threshold values. These parameters influence the sensitivity and specificity of our strategy.
+
+With the code below, you can implement an optimization technique to systematically select the best parameters. Leveraging a backtesting function, we’ll simulate our strategy’s past performance for various parameter combinations. By the end, we aim to fine-tune our strategy to maximize historical performance, keeping in mind the adage: past performance isn’t necessarily indicative of future results.
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+from scipy import signal
+
+# Download ASML.AS historical stock data
+ticker = "ASML.AS"
+stock_data = yf.download(ticker, start="2018-01-01", end="2023-12-30")
+
+# Define parameter ranges
+widths_range = np.arange(1, 15)
+threshold_range = np.arange(0.1, 1.0, 0.1)
+
+# Store the best parameters and their performance
+best_widths = None
+best_threshold = None
+best_performance = -np.inf
+
+def backtest(stock_data, cross_above, cross_below):
+    # We'll start with one "unit" of cash
+    cash = 1.0  
+    stock = 0.0  
+    position = "out"  
+
+    # Go through each day in our data
+    for i in range(len(stock_data)):
+        # If we have a buy signal and we're not already holding the stock
+        if cross_above[i] and position == "out":
+            # Buy the stock
+            stock += cash / stock_data['Close'][i]
+            cash = 0.0
+            position = "in"
+        # If we have a sell signal and we're holding the stock
+        elif cross_below[i] and position == "in":
+            # Sell the stock
+            cash += stock * stock_data['Close'][i]
+            stock = 0.0
+            position = "out"
+
+    # Return our final portfolio value
+    if position == "in":
+        return cash + stock * stock_data['Close'][-1]
+    else:
+        return cash
+
+# Go through each combination of parameters
+for widths in widths_range:
+    for threshold in threshold_range:
+        # Compute the CWT
+        cwt_result = signal.cwt(stock_data['Close'].values, signal.ricker, [widths])
+
+        # Extract relevant coefficients
+        cwt_positive = np.where(cwt_result > threshold, cwt_result, 0)
+        cwt_negative = np.where(cwt_result < -threshold, cwt_result, 0)
+
+        # Calculate signals
+        buy_signal = pd.Series(np.sum(cwt_positive, axis=0), index=stock_data.index)
+        sell_signal = pd.Series(-np.sum(cwt_negative, axis=0), index=stock_data.index)
+        cross_above = (buy_signal >= sell_signal) & (buy_signal.shift(1) < sell_signal.shift(1))
+        cross_below = (buy_signal <= sell_signal) & (buy_signal.shift(1) > sell_signal.shift(1))
+
+        # Calculate performance based on trading signals
+        performance = backtest(stock_data, cross_above, cross_below)
+
+        # Update best parameters if this performance is better
+        if performance > best_performance:
+            best_performance = performance
+            best_widths = widths
+            best_threshold = threshold
+
+# Print the best parameters
+print(f"Best widths: {best_widths}")
+print(f"Best threshold: {best_threshold}")
+print(f"Best performance: {best_performance * 100}%")
+
+# Recalculate the CWT and buy/sell signals using the best parameters
+cwt_result = signal.cwt(stock_data['Close'].values, signal.ricker, [best_widths])
+cwt_positive = np.where(cwt_result > best_threshold, cwt_result, 0)
+cwt_negative = np.where(cwt_result < -best_threshold, cwt_result, 0)
+buy_signal = pd.Series(np.sum(cwt_positive, axis=0), index=stock_data.index)
+sell_signal = pd.Series(-np.sum(cwt_negative, axis=0), index=stock_data.index)
+cross_above = (buy_signal >= sell_signal) & (buy_signal.shift(1) < sell_signal.shift(1))
+cross_below = (buy_signal <= sell_signal) & (buy_signal.shift(1) > sell_signal.shift(1))
+
+# Plot the stock prices and buy/sell signals
+plt.figure(figsize=(30, 6))
+plt.plot(stock_data.index, stock_data['Close'], label='Close Prices', alpha=0.5)
+plt.scatter(stock_data.index[cross_above], stock_data['Close'][cross_above], label='Buy Signal', marker='^', color='g')
+plt.scatter(stock_data.index[cross_below], stock_data['Close'][cross_below], label='Sell Signal', marker='v', color='r')
+plt.title(f'{ticker} Historical Close Prices with Wavelet Transform Buy and Sell Signals')
+plt.legend()
+plt.show()
+
+Enhanced visualization of historical close prices for ASML.AS from 2018 to 2023, highlighting buy and sell signals obtained after optimizing the Wavelet Transform parameters for improved trading performance.
+4. Interpretation and Analysis
+After implementing the wavelet transform on stock data and refining it with optimized parameters, we arrive at a series of buy and sell signals. Upon a closer look:
+
+Sensitivity to Market Noise: Just like other technical indicators, the wavelet transform isn’t immune to market noise. However, its multi-scale nature provides a degree of resilience, allowing it to highlight genuine patterns while potentially filtering out short-term fluctuations.
+Periodic Patterns: Stocks often exhibit cyclical behaviors — quarterly financial reports, yearly market trends, etc. The wavelet’s ability to capture such behaviors at different scales can be a significant advantage in predicting future movements.
+Performance Metrics: While our optimization boosted historical performance, it’s essential to validate the strategy on out-of-sample data. Performance on historical data doesn’t guarantee similar results in the future. It’s crucial to be aware of potential overfitting.
+5. Potential Improvements and Extensions
+Alternative Wavelets: We utilized the Ricker wavelet, but several other wavelet families, such as Daubechies or Haar, might offer different insights. Exploring these can be an exciting avenue.
+Incorporating Other Indicators: While the wavelet transform provides a unique perspective, combining it with other technical indicators might strengthen the decision-making process.
+Machine Learning Integration: Leveraging machine learning algorithms can help in predicting buy/sell signals more accurately. The wavelet coefficients can serve as features for models like decision trees, neural networks, etc.
+Adaptive Thresholding: Instead of a static threshold, dynamic thresholding methods that adapt to changing market conditions might improve signal reliability.
+6. Conclusion
+Wavelet transform provides a unique lens to analyze stock market data, balancing both time and frequency insights. While it offers a fresh perspective, the technique isn’t foolproof — choosing the right parameters is crucial. This approach is just one tool among many in understanding market movements. Traders should combine wavelet analysis with other methods for even sharper insights. Our journey through wavelet analysis emphasizes the continuous innovation in financial research, always seeking clearer understanding and predictive power.

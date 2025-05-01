@@ -1,0 +1,287 @@
+Comprehensive Guide to Fetching and Analysing Macroeconomic Data from FRED
+Jakub Polec
+Jakub Polec
+
+·
+Follow
+
+9 min read
+·
+Sep 5, 2024
+34
+
+
+
+
+
+
+Introduction
+In our quest for an optimal trading strategy — rigorously tested in our QuantJourney Backtester for risk-adjusted returns — we’ll add a layer that focuses on identifying market regimes to dynamically adjust our positions. A basic regime identification approach might classify regimes as bullish, bearish, or neutral, and possibly including a high-volatility regime. To fully capture the complexity and non-linearity of financial markets over extended time horizons, we should expand our framework beyond a simple four-regime model and incorporate macroeconomic indicators.
+
+Market regimes represent distinct environments in which asset returns, volatility, and correlations exhibit structurally different behaviours. Quantifying these regimes enables us to optimise our strategies for higher risk-adjusted returns, enhancing their robustness across varying market conditions. In addition to regime identification, we’ll implement a regime-switching model to track transitions between them. This approach should enable us to spot changes and adjust our positioning — whether aggressive, neutral, or defensive — based on evolving market and macroeconomic conditions.
+
+Macroeconomic variables such as GDP growth, inflation, and central bank policies provide key insights into the broader economic environment shaping these regimes. For instance, during periods of weak or negative GDP growth, a more defensive allocation might be recommended, whereas in times of robust economic expansion, a more aggressive positioning could be justified. These macroeconomic signals enable a deeper, data-driven approach to regime classification, moving beyond price and volatility-based methods.
+
+In this post, we’ll explore how to fetch and analyse macroeconomic data from the Federal Reserve Economic Data (FRED) database using Python. We’ll be using a custom FredConnector class, which is part of the QuantJourney Framework, to interact with the FRED API.
+
+The Origin of FRED Data
+FRED is a vast database of economic data maintained by the Federal Reserve Bank of St. Louis. It contains over 800,000 US and international time series from more than 100 sources. This data is key for economists, researchers, quants and analysts for several reasons:
+
+Economic Indicators: FRED provides key economic indicators like GDP, inflation rates, employment figures, and interest rates.
+Historical Data: It offers long-term historical data, allowing for trend analysis and historical comparisons.
+Diverse Data Sources: FRED aggregates data from various reputable sources, providing a comprehensive view of the economy.
+Frequent Updates: Many series are updated regularly, ensuring access to the most current economic data.
+Setting Up
+To access FRED data, install the required library and register for a FRED API key — at https://fred.stlouisfed.org/docs/api/api_key.html. It is completely free.
+
+pip install fredapi
+from fredapi import Fred
+In QuantJourney Framework you have to specify API key in _config/config.json in FRED position, to let the whole framework use it and get what you need.
+
+MORE AND CODE AT https://quantjourney.substack.com/
+
+The FredConnector Class
+The FredConnector class is part of the QuantJourney Framework, designed to simplify interactions with the FRED API. Let's examine its structure and functionality:
+
+class FredConnector():
+	def __init__(self, api_key):
+		"""
+		Initialize a FredConnector class.
+		Args:
+			api_key (str): The API key for the FRED API.
+		"""
+		if not api_key:
+			raise ValueError("FRED: API key is required")
+		self.api_key = api_key
+		self.connector = Fred(api_key=api_key)
+	def search(self, search_string: str) -> List[Dict]:
+		"""
+		Search the FRED API for a given search string.
+		Examples:
+			search_results = dc.fred.search("GDP")
+			search_results = dc.fred.search("unemployment rate")
+		Args:
+			search_string (str): The string to search the FRED API for.
+		Returns:
+			List[Dict]: A list of dictionaries containing the search results.
+		"""
+		try:
+			return self.connector.search(search_string)
+		except Exception as e:
+			logger.error(f"Error searching Fred API: {e}")
+			return []
+	def get_series(self, search_id: str, observation_start: Optional[str] = None, observation_end: Optional[str] = None) -> pd.DataFrame:
+		"""
+		Get series data between a start and end date.
+		Examples:
+			series_data = dc.fred.get_series("GDP", observation_start="2020-01-01", observation_end="2020-12-31")
+			series_data = dc.fred.get_series("unemployment rate", observation_start="2020-01-01", observation_end="2020-12-31")
+		Args:
+			search_id (str): The ID of the series to fetch.
+			observation_start (Optional[str]): The start date for the data in 'YYYY-MM-DD' format. Defaults to None.
+			observation_end (Optional[str]): The end date for the data in 'YYYY-MM-DD' format. Defaults to None.
+		Returns:
+			pd.DataFrame: The series data.
+		"""
+		try:
+			return self.connector.get_series(search_id, observation_start=observation_start, observation_end=observation_end)
+		except Exception as e:
+			logger.error(f"Error fetching series data: {e}")
+			return pd.DataFrame()
+This class simplifies interaction with the FRED API, providing streamlined methods to search for, retrieve, and analyse time series data while managing API requests and error handling.
+
+Fetching and Analysing Data
+Let’s walk through the process of fetching and analyzing data using real-world examples.
+
+Searching for Data
+First, we’ll search for GDP data:
+
+dc = FredConnector(api_key)
+search_results = dc.search("GDP")
+print(search_results.head())
+This search provides us with various GDP-related series. We’ll focus on the main GDP series (ID: GDP) and other important economic indicators (5th row):
+
+
+Now, let’s fetch the GDP data:
+
+gdp_data = dc.fred.get_series("GDP", observation_start="2010-01-01", observation_end="2023-12-31")
+print(gdp_data.head())
+Should give the following output:
+
+
+And this data represents quarterly GDP values in billions of dollars.
+
+Fetching Multiple Economic Indicators
+Next, we’ll retrieve multiple indicators, including GDP, WTI oil prices, the unemployment rate, and the consumer price index
+
+# Fetch data
+gdp_data = dc.fred.get_series("GDP", observation_start="2010-01-01", observation_end="2023-12-31")
+wti_prices = dc.fred.get_series("DCOILWTICO", observation_start="2010-01-01", observation_end="2023-12-31")
+unemployment_rate = dc.fred.get_series("UNRATE", observation_start="2010-01-01", observation_end="2023-12-31")
+cpi = dc.fred.get_series("CPIAUCSL", observation_start="2010-01-01", observation_end="2023-12-31")
+# Combine data into a DataFrame
+data = pd.DataFrame({
+    'GDP': gdp_data,
+    'WTI_Price': wti_prices,
+    'Unemployment_Rate': unemployment_rate,
+    'CPI': cpi
+})
+# Resample to quarterly frequency
+data_quarterly = data.resample('Q').mean()
+print(data_quarterly.head())
+This will give us a DataFrame with quarterly data for GDP, WTI oil prices, unemployment rate, and consumer price index.
+
+Now, let’s fetch WTI oil price data and analyze its relationship with GDP:
+
+wti_prices = dc.fred.get_series("DCOILWTICO", observation_start="2010-01-01", observation_end="2023-12-31")
+# Merge GDP and WTI price data
+merged_df = pd.DataFrame({'GDP': gdp_data, 'WTI_Price': wti_prices})
+merged_df = merged_df.resample('Q').mean()  # Ensure both series are quarterly
+# Scale the data
+scaler = MinMaxScaler()
+merged_df_scaled = pd.DataFrame(scaler.fit_transform(merged_df), columns=merged_df.columns, index=merged_df.index)
+# Plot scaled data
+plt.figure(figsize=(12, 6))
+merged_df_scaled.plot()
+plt.title('Scaled GDP and WTI Oil Price')
+plt.xlabel('Date')
+plt.ylabel('Scaled Value')
+plt.legend(['GDP', 'WTI Oil Price'])
+plt.show()
+So the output plot shows the relationship between GDP and oil prices over time, with both series scaled to a 0–1 range for easy comparison.
+
+
+Analysing GDP Growth
+Let’s calculate and plot the year-over-year GDP growth rate:
+
+gdp_data_yearly = dc.fred.get_series("GDP", observation_start="2010-01-01", observation_end="2023-12-31").resample('Y').last()
+gdp_growth = gdp_data_yearly.pct_change() * 100
+plt.figure(figsize=(12, 6))
+gdp_growth.plot(kind='bar')
+plt.title('US GDP Year-over-Year Growth Rate')
+plt.xlabel('Year')
+plt.ylabel('Growth Rate (%)')
+plt.show()
+This plot will show the annual GDP growth rate, allowing us to visualise economic expansions and contractions
+
+
+Autocorrelation Analysis
+To understand the time-lagged relationships in our data:
+
+# Create lagged features for WTI price
+for i in range(1, 7):
+    data_quarterly[f'WTI_Price_Lag_{i}'] = data_quarterly['WTI_Price'].shift(i)
+# Compute correlation matrix
+corr_df = data_quarterly.corr()
+# Plot heatmap
+plt.figure(figsize=(12, 10))
+sns.heatmap(corr_df, annot=True, cmap='coolwarm', vmax=1, vmin=-1)
+plt.title('Correlation Heatmap')
+plt.show()
+This heatmap will visualise the correlations between GDP, oil prices, and lagged oil prices, helping us identify potential leading or lagging relationships.
+
+
+ARIMA Forecasting
+Let’s create a simple ARIMA model to forecast GDP. While we acknowledge its limitations and lack of predictability, this example serves to demonstrate how you can modify the approach for your own purposes, particularly in regime identification.
+
+# Prepare data for ARIMA
+gdp_data_diff = data_quarterly['GDP'].diff().dropna()
+# Fit ARIMA model
+model = ARIMA(data_quarterly['GDP'], order=(1,1,1))
+results = model.fit()
+# Forecast
+forecast = results.forecast(steps=4)  # Forecast next 4 quarters
+# Plot results
+plt.figure(figsize=(12, 6))
+data_quarterly['GDP'].plot(label='Observed')
+forecast.plot(label='Forecast')
+plt.title('GDP Forecast using ARIMA')
+plt.xlabel('Date')
+plt.ylabel('GDP (Billions of Dollars)')
+plt.legend()
+plt.show()
+This ARIMA model provides a basic forecast of GDP for the next year, which can be a starting point for more complex economic analyses.
+
+
+Unemployment and GDP Analysis
+Let’s focus on the relationship between unemployment and GDP:
+
+plt.figure(figsize=(12, 6))
+plt.scatter(data_quarterly['Unemployment_Rate'], data_quarterly['GDP'])
+plt.title('GDP vs Unemployment Rate')
+plt.xlabel('Unemployment Rate (%)')
+plt.ylabel('GDP (Billions of Dollars)')
+plt.grid(True)
+# Add a trend line
+z = np.polyfit(data_quarterly['Unemployment_Rate'], data_quarterly['GDP'], 1)
+p = np.poly1d(z)
+plt.plot(data_quarterly['Unemployment_Rate'], p(data_quarterly['Unemployment_Rate']), "r--")
+plt.show()
+This scatter plot will help us visualise the relationship between unemployment and GDP, with a trend line to show the general direction of the relationship.
+
+
+Inflation Analysis using CPI
+Let’s calculate and plot the inflation rate using the Consumer Price Index:
+
+# Calculate year-over-year inflation rate
+inflation_rate = data_quarterly['CPI'].pct_change(4) * 100
+plt.figure(figsize=(12, 6))
+plt.plot(inflation_rate.index, inflation_rate)
+plt.title('Inflation Rate (Year-over-Year)')
+plt.xlabel('Date')
+plt.ylabel('Inflation Rate (%)')
+plt.grid(True)
+# Add a horizontal line at 2% (common inflation target)
+plt.axhline(y=2, color='r', linestyle='--', label='2% Target')
+plt.legend()
+plt.show()
+This plot will show the inflation rate over time, with a reference line at 2% (a common inflation target for many central banks).
+
+
+Economic Cycle Analysis
+Finally, let’s create a plot that might help visualize the economic cycle:
+
+# Normalize the data
+normalized_data = (data_quarterly - data_quarterly.mean()) / data_quarterly.std()
+plt.figure(figsize=(14, 8))
+plt.plot(normalized_data.index, normalized_data['GDP'], label='GDP')
+plt.plot(normalized_data.index, normalized_data['Unemployment_Rate'], label='Unemployment Rate')
+plt.plot(normalized_data.index, normalized_data['WTI_Price'], label='Oil Price')
+plt.title('Normalized Economic Indicators')
+plt.xlabel('Date')
+plt.ylabel('Standard Deviations from Mean')
+plt.legend()
+plt.grid(True)
+plt.show()
+This plot shows the GDP, unemployment rate, and oil prices normalised to their respective means and standard deviations. This can help visualise how these indicators move relative to each other throughout the economic cycle.
+
+
+Identifying and Quantifying Regimes
+Now that we have established how to retrieve macroeconomic data, we can shift our focus to identifying and quantifying market regimes using these indicators.
+
+Simple threshold-based classification: Define thresholds for key indicators to classify regimes. For example:
+Bullish: GDP growth > 2%, unemployment < 5%, inflation between 1–3%
+Bearish: GDP growth < 0%, unemployment > 7%, inflation > 4% or < 0%
+Neutral: Indicators between bullish and bearish thresholds
+2. Use Z-score classification: Calculate z-scores for each macroeconomic indicator to measure how many standard deviations they are from their historical mean. Combine z-scores to define regimes:
+
+Bullish: GDP z-score > 1, unemployment z-score < -1, inflation z-score between -1 and 1
+Bearish: GDP z-score < -1, unemployment z-score > 1, inflation z-score > 1 or < -1
+Neutral: Z-scores between bullish and bearish thresholds
+3. Principal Component Analysis (PCA): Use PCA to reduce the dimensionality of the macroeconomic data and identify the primary drivers of market regimes. Plot the first two principal components and identify clusters corresponding to different regimes. That would work if you add more data and indicators, and try to assess the key drivers.
+
+4. Use Machine learning classification: Train a supervised learning model (e.g., decision tree, SVM, or neural network) to classify market regimes based on historical macroeconomic data. The model can learn complex, non-linear relationships between the indicators and regimes.
+
+5. Gaussian Mixture Models (GMM): Use GMM to cluster the macroeconomic data into distinct regimes. This is an unsupervised learning approach that can identify regimes without requiring predefined labels.
+
+Detecting Regime Transitions
+As we stated at the beginning, additional value comes from identifying regime transitions. To detect when the market is shifting between regimes:
+
+Moving average crossovers: Calculate short-term and long-term moving averages of key macroeconomic indicators. When the short-term average crosses above (below) the long-term average, it signals a potential shift to a bullish (bearish) regime.
+Z-score thresholds: Again, monitor changes in the z-scores of key indicators. If multiple z-scores cross predefined thresholds simultaneously (e.g., moving from negative to positive or vice versa), it suggests a regime shift.
+Markov-switching models: Employ a Markov-switching model to estimate the probability of being in each regime at any given time. When the probability of a new regime becomes higher than the current regime, it indicates a transition.
+When a regime shift is detected, adjust the trading strategy accordingly:
+
+Bullish: Increase risk exposure, allocate more capital to equities and other risk assets
+Bearish: Reduce risk exposure, shift capital to defensive assets like bonds and gold
+Neutral: Maintain balanced risk exposure, focus on stock selection and sector rotation

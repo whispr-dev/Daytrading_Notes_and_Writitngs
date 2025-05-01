@@ -1,0 +1,200 @@
+🧠 Section 6: Fourier + ARIMA + LSTM Hybrid Forecasting — Smoothed Signal Superpowers
+✦ Why Blend Models?
+Because markets are noisy.
+
+No one model can capture all structure.
+So we use hybrid forecasting to layer strengths:
+
+ARIMA handles linear trends & autoregressive terms
+
+Fourier captures seasonal/periodic patterns
+
+LSTM models nonlinear, temporal dependencies
+
+Together, they form a time-series dream team.
+
+✦ Overall Architecture
+Decompose price series into:
+
+Trend (via moving average or STL)
+
+Seasonality (via FFT)
+
+Noise (residuals)
+
+Forecast:
+
+Trend with ARIMA
+
+Seasonality with Fourier transform
+
+Residuals with LSTM
+
+Reconstruct:
+Final Forecast = ARIMA + FFT + LSTM
+
+📄 Step-by-Step Implementation
+We’ll use MSFT as an example. You can swap in any ticker.
+
+📄 1. Preprocess & Decompose Series
+📄 forecasting/decompose_signal.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import numpy as np
+import pandas as pd
+from statsmodels.tsa.seasonal import STL
+import matplotlib.pyplot as plt
+
+ticker = 'MSFT'
+df = yf.download(ticker, start='2020-01-01', end='2024-01-01')
+series = df['Adj Close'].dropna()
+
+# STL decomposition
+stl = STL(series, period=30)  # roughly monthly
+res = stl.fit()
+
+# Extract components
+trend = res.trend
+seasonal = res.seasonal
+residual = res.resid
+
+# Plot
+plt.figure(figsize=(12, 8))
+plt.subplot(4,1,1); plt.plot(series); plt.title("Original Series")
+plt.subplot(4,1,2); plt.plot(trend); plt.title("Trend")
+plt.subplot(4,1,3); plt.plot(seasonal); plt.title("Seasonality")
+plt.subplot(4,1,4); plt.plot(residual); plt.title("Residuals")
+plt.tight_layout(); plt.show()
+📄 2. Forecast Trend with ARIMA
+📄 forecasting/arima_trend_forecast.py
+
+python
+Copy
+Edit
+from statsmodels.tsa.arima.model import ARIMA
+
+model = ARIMA(trend.dropna(), order=(5,1,0))
+model_fit = model.fit()
+
+forecast_arima = model_fit.forecast(steps=30)
+📄 3. Forecast Seasonality with FFT
+📄 forecasting/fft_seasonal.py
+
+python
+Copy
+Edit
+from scipy.fft import fft, ifft
+
+season = seasonal.values
+N = len(season)
+season_fft = fft(season)
+
+# Keep only first few frequencies
+n_keep = 10
+filtered = np.zeros_like(season_fft)
+filtered[:n_keep] = season_fft[:n_keep]
+
+reconstructed = ifft(filtered).real
+future_season = np.tile(reconstructed[-30:], 1)
+📄 4. Forecast Residuals with LSTM
+📄 forecasting/lstm_residual.py
+
+python
+Copy
+Edit
+import torch
+import torch.nn as nn
+from sklearn.preprocessing import MinMaxScaler
+
+class LSTMNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lstm = nn.LSTM(1, 64, batch_first=True)
+        self.fc = nn.Linear(64, 1)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        return self.fc(out[:, -1, :])
+
+# Prepare data
+resid = residual.dropna().values.reshape(-1, 1)
+scaler = MinMaxScaler()
+resid_scaled = scaler.fit_transform(resid)
+
+window = 30
+X, y = [], []
+for i in range(len(resid_scaled) - window):
+    X.append(resid_scaled[i:i+window])
+    y.append(resid_scaled[i+window])
+
+X, y = np.array(X), np.array(y)
+X_torch = torch.tensor(X, dtype=torch.float32)
+y_torch = torch.tensor(y, dtype=torch.float32)
+
+# Train LSTM
+model = LSTMNet()
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+for epoch in range(10):
+    model.train()
+    out = model(X_torch)
+    loss = loss_fn(out, y_torch)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    print(f"Epoch {epoch+1}, Loss: {loss.item():.6f}")
+
+# Predict next 30 steps
+model.eval()
+with torch.no_grad():
+    inp = torch.tensor(resid_scaled[-window:], dtype=torch.float32).unsqueeze(0)
+    preds = []
+    for _ in range(30):
+        pred = model(inp)
+        preds.append(pred.item())
+        inp = torch.cat((inp[:, 1:, :], pred.unsqueeze(0).unsqueeze(2)), dim=1)
+
+future_resid = scaler.inverse_transform(np.array(preds).reshape(-1,1)).flatten()
+🔮 Final Hybrid Forecast
+python
+Copy
+Edit
+hybrid_forecast = forecast_arima.values + future_season + future_resid
+
+# Plot
+plt.plot(range(len(series)), series, label='Historical')
+plt.plot(range(len(series), len(series)+30), hybrid_forecast, label='Hybrid Forecast', color='red')
+plt.legend()
+plt.title("30-Day Hybrid Forecast: ARIMA + FFT + LSTM")
+plt.tight_layout()
+plt.show()
+🧠 What’s Powerful Here?
+Trend stability from ARIMA
+
+Seasonal logic from FFT
+
+Noise/memory captured by LSTM
+
+Combines classic & deep learning in a way most retail traders never attempt
+
+✨ Bonus Ideas
+Use Prophet instead of ARIMA
+
+Stack residual predictors: LSTM + Ridge
+
+Detect regime shifts via Z-score change in residuals
+
+✦ Coming Up Next: Trend Classification Showdown
+In Section 7, we’ll:
+
+Implement 6 trend classification models
+
+Compare performance across random forests, SVMs, CNNs, LSTMs, rule-based logic
+
+Visualize trend maps
+
+Deploy the best model to score trades

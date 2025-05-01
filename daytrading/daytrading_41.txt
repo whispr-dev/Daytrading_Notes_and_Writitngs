@@ -1,0 +1,313 @@
+Understanding Structured State Space Models (SSMs) for Time Series
+shashank Jain
+AI Mind
+shashank Jain
+
+·
+Follow
+
+Published in
+AI Mind
+
+·
+8 min read
+·
+Sep 4, 2024
+139
+
+
+
+
+
+
+Structured State Space Models (SSMs) are a powerful tool in the field of deep learning, offering an efficient way to model sequential data while overcoming many of the challenges faced by traditional models like Recurrent Neural Networks (RNNs) and Transformers. In this blog, we’ll explore what SSMs are, how they work, and why they might be a better choice for certain tasks compared to RNNs and Transformers. We’ll also go over the mathematics behind SSMs, the loss function in terms of matrices, and walk through a practical example of using SSMs for stock price prediction.
+
+What are Structured State Space Models (SSMs)?
+
+SSMs are a class of models that use linear state-space equations to describe the evolution of a system over time. Unlike RNNs, which update their states non-linearly and sequentially, or Transformers, which use a self-attention mechanism that scales quadratically with the sequence length, SSMs evolve states in a linear manner and use a structured approach to handle long-range dependencies efficiently.
+
+Key Characteristics of SSMs:
+
+1. Linear State Evolution: The state evolution in SSMs is linear, represented by matrix multiplications, which allows for efficient computation.
+2. Polynomial Representation: The state evolution over multiple steps can be expressed as a polynomial of the state transition matrix, enabling parallel computation.
+3. Flexibility with Non-Linear Mappings: SSMs can introduce non-linearity through output mappings or gating mechanisms.
+
+Comparison with RNNs and Transformers
+
+- RNNs:
+— State Evolution: RNNs update their states using non-linear functions (like tanh or ReLU), leading to sequential dependencies.
+— Challenges: RNNs suffer from vanishing/exploding gradients, making it hard to train them on long sequences.
+— Lack of Parallelism: Each state computation depends on the previous one, limiting parallelism.
+
+- Transformers:
+— Self-Attention Mechanism: Transformers compute dependencies between all pairs of input tokens using a self-attention mechanism, which has a complexity of O(N²) where N is the sequence length.
+— Scalability Issues: For very long sequences, Transformers require a large amount of memory and computation.
+— No Explicit State Representation: Transformers do not maintain a state that evolves over time.
+
+- SSMs:
+— Efficient State Evolution: SSMs evolve states using a matrix multiplication approach that is efficient and parallelizable.
+— Better Long-Range Dependency Modeling: SSMs capture both short-term and long-term dependencies effectively through matrix powers.
+— Lower Computational Complexity: The polynomial representation allows SSMs to handle long sequences with lower complexity compared to Transformers.
+
+State Transition Matrix and Its Polynomial Representation
+
+In SSMs, the state evolution is governed by the state transition matrix A. Let’s break down how this matrix is used and why it becomes a polynomial of matrix multiplications.
+
+Mathematical Representation of State Evolution
+
+1. State Evolution Equation:
+
+x[k] = A x[k-1] + B u[k-1]
+
+where:
+- x[k] is the state at time step k.
+- A is the state transition matrix.
+- B is the input matrix.
+- u[k-1] is the input at time step k-1.
+
+2. Recursive Expansion of State Evolution:
+
+Let’s start from the initial state and expand to show how later states depend on powers of A:
+
+- At time step 1:
+
+x[1] = A x[0] + B u[0]
+
+- At time step 2:
+
+x[2] = A x[1] + B u[1]
+
+Substitute for x[1]:
+
+x[2] = A (A x[0] + B u[0]) + B u[1]
+
+x[2] = A² x[0] + A B u[0] + B u[1]
+
+- At time step 3:
+
+x[3] = A x[2] + B u[2]
+
+Substitute for x[2]:
+
+x[3] = A (A² x[0] + A B u[0] + B u[1]) + B u[2]
+
+x[3] = A³ x[0] + A² B u[0] + A B u[1] + B u[2]
+
+3. General Form for Time Step k:
+
+x[k] = A^k x[0] + sum(j=0 to k-1) A^(k-j-1) B u[j]
+
+This shows that the state at any time step k is a polynomial in the matrix A. The use of matrix powers allows the model to efficiently compute the evolution of the state over time, which is different from RNNs that use non-linearities like tanh or ReLU at every step.
+
+Loss Function in Terms of Matrices
+
+The loss function typically used in SSMs is the Mean Squared Error (MSE) loss for regression tasks. The MSE loss measures the difference between predicted outputs and true outputs.
+
+For all sequences, the loss function can be expressed as:
+
+Total Loss = (1/N) sum(i=1 to N) (1/T) sum(k=0 to T-1) ||y_i[k] — y_i,true[k]||²
+
+Substitute the output in terms of matrix polynomials:
+
+Total Loss = (1/N) sum(i=1 to N) (1/T) sum(k=0 to T-1) ||sum(j=0 to k) (C A^j B) u_i[k-j] — y_i,true[k]||²
+
+where:
+- C A^j B represents the polynomial kernel for the SSM.
+- N is the number of sequences, and T is the length of each sequence.
+
+What Does the Network Learn?
+
+- State Transition Matrix A: The network learns the structure and values of matrix A that governs how the state evolves over time.
+- Input Matrix B: The network learns how the input u influences the state.
+- Output Matrix C: The network learns how to map the internal state x[k] to the output y[k].
+- Non-Linear Functions: If present, it learns parameters of any non-linear mappings applied to the outputs.
+
+By learning these matrices and functions, the SSM effectively models both short-term and long-term dependencies in the data.
+
+Code for Stock Price Prediction Using SSM
+
+Let’s apply an SSM to predict stock prices. We use a sliding window approach to prepare the data and train the model.
+
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+
+# Step 1: Fetch Historical Stock Data
+ticker = ‘RELIANCE.NS’
+data = yf.download(ticker, start=’2015–01–01', end=’2024–01–01')
+prices = data[‘Close’].values
+
+# Step 2: Prepare Data Using Sliding Window
+scaler = MinMaxScaler()
+prices_scaled = scaler.fit_transform(prices.reshape(-1, 1))
+window_size = 30
+X, y = [], []
+
+for i in range(len(prices_scaled) — window_size):
+X.append(prices_scaled[i:i + window_size])
+y.append(prices_scaled[i + window_size])
+
+X = np.array(X)
+y = np.array(y)
+
+# Reshape X for PyTorch (batch_size, sequence_length, input_size)
+X = X.reshape(X.shape[0], X.shape[1])
+
+# Step 3: Implement the State Space Model
+class StateSpaceModel(nn.Module):
+def __init__(self, input_size, hidden_size, output_size):
+super(StateSpaceModel, self).__init__()
+self.fc1 = nn.Linear(input_size, hidden_size) # Input to hidden layer
+self.fc2 = nn.Linear(hidden_size, output_size) # Hidden to output layer
+
+def forward(self, x):
+h = torch.relu(self.fc1(x))
+output = self.fc2(h)
+return output
+
+# Initialize the model
+input_size = window_size
+hidden_size = 64
+output_size = 1
+model = StateSpaceModel(input_size, hidden_size, output_size)
+
+# Convert data to PyTorch tensors
+X_tensor = torch.tensor(X, dtype=torch.float32)
+y_tensor = torch.tensor(y, dtype=torch.float32)
+
+# Split data into training and test sets
+train_size = int(0.8 * len(X_tensor))
+X_train, X_test = X_tensor[:train_size], X_tensor[train_size:]
+y_train, y_test = y_tensor[:train_size], y_tensor[train_size:]
+
+# Step 4: Train the Model
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+# Lists to store the loss values
+train_losses = []
+val_losses = []
+
+num_epochs = 100
+for epoch in range(num_epochs):
+model.train()
+optimizer.zero_grad()
+
+# Forward pass
+outputs = model(X_train)
+loss = criterion(outputs, y_train)
+
+# Backward pass and optimization
+loss.backward()
+optimizer.step()
+
+# Store the training loss
+train_losses.append(loss.item())
+
+# Calculate validation loss
+model.eval()
+with torch.no_grad():
+val_outputs = model(X_test)
+val_loss = criterion(val_outputs, y_test)
+val_losses.append(val_loss.item())
+
+if (epoch+1) % 10 == 0:
+print(f’Epoch [{epoch+1}/{num_epochs}], Training Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}’)
+
+# Step 5: Evaluate the Model
+model.eval()
+with torch.no_grad():
+predictions_train = model(X_train).squeeze().numpy()
+predictions_test = model(X_test).squeeze().numpy()
+
+y_train_rescaled = scaler.inverse_transform(y_train.numpy().reshape(-1, 1))
+predictions_train_rescaled = scaler.inverse_transform(predictions_train.reshape(-1, 1))
+
+y_test_rescaled = scaler.inverse_transform(y_test.numpy().reshape(-1, 1))
+predictions_test_rescaled = scaler.inverse_transform(predictions_test.reshape(-1, 1))
+
+# Calculate MAE and MAPE
+mae_train = np.mean(np.abs(y_train_rescaled — predictions_train_rescaled))
+mape_train = np.mean(np.abs((y_train_rescaled — predictions_train_rescaled) / y_train_rescaled)) * 100
+
+mae_test = np.mean(np.abs(y_test_rescaled — predictions_test_rescaled))
+mape_test = np.mean(np.abs((y_test_rescaled — predictions_test_rescaled) / y_test_rescaled)) * 100
+
+print(f’Training MAE: {mae_train:.4f}, Training MAPE: {mape_train:.2f}%’)
+print(f’Test MAE: {mae_test:.4f}, Test MAPE: {mape_test:.2f}%’)
+
+# Step 6: Plot Results
+plt.figure(figsize=(14, 10))
+
+# Plot the loss curves
+plt.subplot(2, 1, 1)
+plt.plot(train_losses, label=’Training Loss’)
+plt.plot(val_losses, label=’Validation Loss’)
+plt.xlabel(‘Epoch’)
+plt.ylabel(‘Loss’)
+plt.title(‘Training and Validation Loss Curves’)
+plt.legend()
+
+# Plot the predicted vs true prices
+plt.subplot(2, 1, 2)
+plt.plot(data.index[window_size:window_size + len(y_train)], y_train_rescaled, label=’True Training Prices’)
+plt.plot(data.index[window_size:window_size + len(predictions_train)], predictions_train_rescaled, label=’Predicted Training Prices’)
+plt.plot(data.index[window_size + len(y_train):], y_test_rescaled, label=’True Test Prices’)
+plt.plot(data.index[window_size + len(y_train):], predictions_test_rescaled, label=’Predicted Test Prices’)
+plt.xlabel(‘Date’)
+plt.ylabel(‘Price’)
+plt.title(‘Reliance Industries Stock Price Prediction’)
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+Explanation of Code for Stock Price Prediction
+
+1. Data Preparation:
+— The historical stock data is fetched using the yfinance library.
+— A sliding window approach is used to create input sequences (X) and their corresponding targets (y).
+
+2. Model Definition:
+— A simple neural network model (StateSpaceModel) is defined with one hidden layer to act as an SSM.
+— The model learns the matrices A, B, and C implicitly through the linear layers.
+
+3. Training and Evaluation:
+— The model is trained using the Mean Squared Error (MSE) loss function, and both training and validation losses are tracked.
+— The model’s performance is evaluated on a test set, and metrics like Mean Absolute Error (MAE) and Mean Absolute Percentage Error (MAPE) are computed.
+
+4. Plotting Results:
+— The loss curves for both training and validation sets are plotted to visualize the model’s learning progress.
+— The predicted vs. true prices are also plotted to assess the model’s accuracy.
+
+Results
+
+SBIN.NS stock price prediction
+Training MAE: 15.5606
+Training MAPE: 5.56%
+Test MAE: 24.8836
+Test MAPE: 4.40%
+
+
+Reliance.NS
+Training MAE: 45.8417
+Training MAPE: 4.65%
+Test MAE: 67.7474
+Test MAPE: 2.87%
+
+
+Manali Petrochemicals
+Training MAE: 2.9379
+Training MAPE: 8.33%
+Test MAE: 5.4362
+Test MAPE: 6.52%
+
+
+Conclusion
+
+Structured State Space Models (SSMs) offer a powerful and efficient way to model sequential data, combining the best of both worlds from RNNs and Transformers. By using matrix polynomials for state evolution, SSMs provide stable and efficient training while capturing long-range dependencies. With the flexibility to introduce non-linearity through output functions and other mechanisms, SSMs are a versatile tool for many time-series and sequence modeling tasks.

@@ -1,0 +1,22 @@
+Table of Contents
+1. Introduction
+
+2. The Evolution of AI-Driven Day Trading
+
+3. Deep Ensemble Models: CNNs, LSTMs, and TCNs in Practice
+
+4. Dynamic Lag Optimization with Sliding Windows and LSTMs
+
+5. Adaptive Filtering: The Laguerre Polynomial Approach
+
+6. Clustering, Segmentation & Stock Universes
+
+7. Anomaly Detection with Isolation Forests & Time Series Validation
+
+8. XGBoost, HMMs & Multi-Model Forecasting
+
+9. Fetching Financials at Scale: SEC Scraping & CAN SLIM
+
+10. Putting It All Together: An End-to-End AI Strategy Blueprint
+
+11. Conclusion and Future Exploration

@@ -1,0 +1,472 @@
+Harnessing Deep Learning for Stock Market Predictions: A CNN Approach
+Jermaine Matthew
+Jermaine Matthew
+
+·
+Follow
+
+19 min read
+·
+Mar 23, 2024
+149
+
+
+
+
+
+
+Unveiling the Power of Convolutional Neural Networks in Forecasting Financial Trends with Precision
+
+Imports libraries for data preprocessing.
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import datetime
+from sklearn import preprocessing
+from operator import itemgetter
+from sklearn.metrics import mean_squared_error
+import keras
+import seaborn as sns
+sns.set()
+Various libraries are imported for data manipulation, visualization, and machine learning in Python. Here is an overview of each library’s purpose:
+
+NumPy (imported as np): It is a fundamental package for scientific computing, offering support for large multi-dimensional arrays and matrices, along with various mathematical functions.
+Matplotlib.pyplot (imported as plt): Matplotlib is a plotting library used for creating diverse visualizations in Python. The pyplot module provides a MATLAB-like interface for plotting.
+Pandas (imported as pd): Pandas is a powerful data manipulation library that enhances NumPy capabilities for fast and simple data analysis in Python.
+Datetime: Python’s datetime module facilitates manipulation of dates and times.
+sklearn.preprocessing: This module from scikit-learn offers utility functions and transformer classes to preprocess and normalize data for machine learning algorithms.
+operator.itemgetter: Used to create a callable that retrieves items at specified indices from iterable objects like lists.
+sklearn.metrics.mean_squared_error: Computes the mean squared error (MSE) to evaluate the performance of regression models.
+Keras: A high-level neural networks API that simplifies the creation of deep learning models on TensorFlow, CNTK, or Theano.
+Seaborn: A Python data visualization library built on Matplotlib, offering a high-level interface for creating visually appealing statistical graphics.
+sns.set(): Sets the Seaborn plotting style to the default style.
+These libraries enable efficient data analysis, visualization, and machine learning tasks in Python by providing specific functionalities to handle data, develop models, and present results effectively.
+
+Read the data and convert it into a pandas dataframe.
+
+Reads, manipulates, and displays stock data.
+df = pd.read_csv("https://raw.githubusercontent.com/ashishpatel26/NYSE-STOCK_MARKET-ANALYSIS-USING-LSTM/master/nyse/prices-split-adjusted.csv", index_col = 0)
+df["adj close"] = df.close # Moving close to the last column
+df.drop(['close'], 1, inplace=True) # Moving close to the last column
+df.head()
+
+This process involves reading a CSV file from a provided URL into a pandas DataFrame. After loading the data, it changes the column ‘close’ to ‘adj close’ (adjusted close) by renaming it. Then, it removes the original ‘close’ column, keeping the adjusted close as the last column in the DataFrame. Finally, a preview of the initial rows of the DataFrame is displayed.
+
+Such a procedure is important for updating and organizing the DataFrame to enhance its usability for analysis or processing. It includes actions like renaming columns and improving the column order to facilitate data interpretation and manipulation.
+
+Reads and displays data from URL.
+df2 = pd.read_csv("https://raw.githubusercontent.com/ashishpatel26/NYSE-STOCK_MARKET-ANALYSIS-USING-LSTM/master/nyse/fundamentals.csv")
+df2.head()
+
+This script fetches a CSV file from a URL using the Pandas library in Python. The CSV file is then loaded into a Pandas DataFrame using pd.read_csv(). The URL points to a CSV file hosted on a GitHub repository.
+
+Once the data is loaded into the DataFrame, the df2.head() method is utilized to display the initial rows of the DataFrame. This is useful for quickly examining the data’s structure, column names, and example values.
+
+Employing this script is crucial for accessing and evaluating data stored in CSV files available online. It enables the data to be loaded into a structured format for conducting various data manipulation and analysis tasks in Python.
+
+Retrieve all symbols from the given list.
+
+Finds unique symbols in a DataFrame.
+symbols = list(set(df.symbol))
+len(symbols)
+501
+This process retrieves the unique symbols found in the DataFrame df and saves them into a list named ‘symbols’.
+
+Here’s the explanation:
+
+By using set(df.symbol), a set of unique elements is created by isolating the ‘symbol’ column from the DataFrame df.
+This set of unique symbols is then converted into a list using the list() function.
+len(symbols) provides the count of unique symbols in the list.
+This snippet is beneficial for removing duplicate symbols from a dataset, allowing for analysis or processing with only distinct values. It aids in eliminating repetition and guaranteeing that each unique symbol is only considered once in subsequent tasks.
+
+Selects the first 11 elements.
+symbols[:11]
+['ES', 'NLSN', 'PNW', 'SYY', 'NTRS', 'MTB', 'HP', 'DPS', 'NFLX', 'MON', 'MUR']
+This process extracts the elements from index 0 up to (but not including) index 11 of the “symbols” data structure. Extraction is commonly utilized when you wish to access a specific portion of a collection or sequence of items. It is important in situations where you need to work with only a subset of data rather than the entire dataset. This approach allows you to concentrate on a smaller portion of the data for analysis or manipulation, without the need to handle the entire collection simultaneously.
+
+Select and drop symbol column for GOOG.
+df = df[df.symbol == 'GOOG']
+df.drop(['symbol'],1,inplace=True)
+df.head()
+
+This task involves working with a DataFrame called df. The code filters the DataFrame to retain only rows where the ‘symbol’ column contains the value ‘GOOG’. After this filtering, the ‘symbol’ column is removed from the DataFrame.
+
+Here’s an overview of the process:
+
+Filtering: The code filters df to keep only rows where ‘symbol’ is ‘GOOG’.
+Column removal: The code drops the ‘symbol’ column from df.
+Display: The code shows the initial rows of the modified DataFrame using df.head().
+This code is useful when we want to subset a DataFrame based on specific criteria and eliminate unnecessary columns, making the data more focused for analysis and enhancing efficiency.
+
+Summarizes DataFrame information.
+df.info()
+<class 'pandas.core.frame.DataFrame'>
+Index: 1762 entries, 2010-01-04 to 2016-12-30
+Data columns (total 5 columns):
+ #   Column     Non-Null Count  Dtype  
+---  ------     --------------  -----  
+ 0   open       1762 non-null   float64
+ 1   low        1762 non-null   float64
+ 2   high       1762 non-null   float64
+ 3   volume     1762 non-null   float64
+ 4   adj close  1762 non-null   float64
+dtypes: float64(5)
+memory usage: 82.6+ KB
+The df.info() function in a pandas DataFrame gives a brief overview of the DataFrame’s details. It shows the number of entries (rows), the number of columns, the data types of each column, and the count of non-null values in each column.
+
+This function is valuable in data analysis to promptly examine the DataFrame’s size, column data types, and any missing values in the dataset. It aids in gaining insights into the data’s structure and quality before proceeding with additional operations or analysis.
+
+Plot Google stock price analysis.
+df.plot(figsize=(23,8),title = "Google Stock Price Analysis")
+plt.subplot(411)
+plt.plot(df.open, label='Original')
+plt.legend(loc='best')
+plt.subplot(412)
+plt.plot(df.low, label='Trend')
+plt.legend(loc='best')
+plt.subplot(413)
+plt.plot(df.high,label='Seasonality')
+plt.legend(loc='best')
+plt.subplot(414)
+plt.plot(df.volume, label='Residuals')
+plt.legend(loc='best')
+plt.tight_layout()
+plt.show()
+This visualization tool is designed to analyze stock prices of Google. It uses Matplotlib library to plot the data. Here is an overview of what the code accomplishes:
+
+Sets the figure size to 23x8 inches and adds a title “Google Stock Price Analysis” to the plot.
+Creates a 4x1 grid of subplots using plt.subplot(). Each subplot displays a different aspect of the stock price data (open, low, high, volume).
+Subplots are labeled as follows: ‘Original’ for open price, ‘Trend’ for low price, ‘Seasonality’ for high price, and ‘Residuals’ for volume.
+Legends are included in each subplot to clarify the data being shown.
+plt.tight_layout() adjusts the spacing between subplots for improved readability.
+Finally, plt.show() presents the plot with the subplots arranged as specified.
+This code enables a coherent visualization of the stock price data components, aiding in the identification of patterns and trends. It facilitates a better understanding of stock price movements through the analysis of open, low, high, and volume data elements.
+
+Prepare the data for analysis
+
+Normalize stock data for plotting.
+def normalize_data(df):
+    min_max_scaler = preprocessing.MinMaxScaler()
+    df['open'] = min_max_scaler.fit_transform(df.open.values.reshape(-1,1))
+    df['high'] = min_max_scaler.fit_transform(df.high.values.reshape(-1,1))
+    df['low'] = min_max_scaler.fit_transform(df.low.values.reshape(-1,1))
+    df['volume'] = min_max_scaler.fit_transform(df.volume.values.reshape(-1,1))
+    df['adj close'] = min_max_scaler.fit_transform(df['adj close'].values.reshape(-1,1))
+    return df
+df = normalize_data(df)
+df.plot(figsize=(23,10))
+plt.show()
+plt.subplot(411)
+plt.plot(df.open, label='Original')
+plt.legend(loc='best')
+plt.subplot(412)
+plt.plot(df.low, label='Trend')
+plt.legend(loc='best')
+plt.subplot(413)
+plt.plot(df.high,label='Seasonality')
+plt.legend(loc='best')
+plt.subplot(414)
+plt.plot(df.volume, label='Residuals')
+plt.legend(loc='best')
+plt.tight_layout()
+plt.show()
+
+This process normalizes the numerical columns (‘open’, ‘high’, ‘low’, ‘volume’, ‘adj close’) in a DataFrame. Normalization involves rescaling the numeric column values to a common scale without distorting differences in their ranges.
+
+The Min-Max scaling technique from the MinMaxScaler in Python’s scikit-learn library is used for normalization. This technique scales and translates each feature independently so that it falls within a specified range, typically 0 to 1.
+
+Normalization can enhance the model training process, especially for algorithms that are sensitive to input data scale like neural networks, support vector machines, and k-means clustering.
+
+After normalizing the data, the code visualizes the normalized columns by plotting them with Matplotlib. This visualization aids in understanding how the data is distributed across different columns after normalization.
+
+Overall, this code ensures that the data in the DataFrame is uniformly scaled to a specific range to boost model performance and further provides a visual analysis of the normalized data.
+
+Remove column, load stock data with windowing.
+del df['volume']
+def load_data(stock, window):
+    data = stock.to_numpy() 
+    result = []
+    
+    for index in range(len(data) - window): # maxmimum date = lastest date - sequence length
+        result.append(data[index: index + window]) # index : index + n days
+    
+    result = np.array(result).reshape(4*window, -1)
+    row = round(0.9 * result.shape[1]) # 90% split
+    
+    x_train = result[:, :int(row)] 
+    y_train = data[window:window+int(row),3].reshape(-1, 1)
+    
+    x_test = result[:, int(row):] 
+    y_test = data[window+int(row):,3].reshape(-1, 1)  
+    return [x_train, y_train, x_test, y_test]
+The load_data function preprocesses input data for a machine learning model as follows:
+
+Removes the ‘volume’ column from a pandas DataFrame.
+Takes stock (presumably a pandas DataFrame) and window (an integer) as parameters.
+Converts the stock DataFrame to a NumPy array named data.
+Initializes an empty list called result.
+Iterates over data to create sequences of length window and appends them to result.
+Converts result to a 2D NumPy array with 4 times the size of window.
+Determines the index to split the data into 90–10 for training and testing.
+Splits the data into x_train, y_train, x_test, and y_test.
+x_train contains the first row columns from result, while y_train holds the value after the window in the first row, same for the test set.
+This function is crucial for preparing data for training and testing machine learning models, especially those that deal with sequence data like time series models. It creates input features (x_train and x_test) and target values (y_train and y_test) in a format suitable for learning algorithms.
+
+Load training and testing data.
+x_train, y_train, x_test, y_test = load_data(df.iloc[:1760,:], 10)
+This process involves loading data for a machine learning model. Here is an overview of what it accomplishes:
+
+It takes a DataFrame df and selects the first 1760 rows along with all columns.
+The sliced DataFrame and the value 10 are used as parameters in a call to a load_data function.
+The load_data function is likely responsible for organizing the data into features and labels for training and testing datasets to prepare it for training a machine learning model.
+The results returned from load_data are then stored in the variables x_train, y_train, x_test, y_test.
+In machine learning, such operations are essential for dividing the data into training and testing sets. This separation enables the model to be trained on one set and assessed on another to evaluate its performance. Proper splitting is crucial to ensure the model can effectively generalize to new data and avoid overfitting.
+
+Outputs shape of training data.
+x_train.shape
+y_train.shape
+(1575, 1)
+The shapes of the arrays x_train and y_train can be printed to understand the dimensions of the arrays along each axis. This information is often useful in machine learning and data analysis to determine the size of the input data.
+
+Knowing the shapes of these arrays is essential for debugging code, checking data validity, and confirming that the data is correctly formatted for use in machine learning models or other data processing activities.
+
+Building the Model Structure
+Epochs: 10000
+DNN: 256
+It imports TensorFlow and Keras components.
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import models
+from tensorflow.keras import layers
+from tensorflow.keras import optimizers
+To build and train neural networks using TensorFlow, the following modules and submodules are imported:
+
+tensorflow: the main library for numerical computation essential for building machine learning models.
+tensorflow.keras: a high-level API for model building and training in TensorFlow.
+tensorflow.keras.models: functions for building and manipulating models like Sequential and Model.
+tensorflow.keras.layers: functions for creating neural network layers such as Dense and Conv2D.
+tensorflow.keras.optimizers: includes optimization algorithms like SGD and Adam to update model weights during training to minimize loss.
+Importing these components sets the foundation for creating, compiling, and training neural networks with TensorFlow. This setup is crucial for defining network architecture, choosing optimization strategies, and determining how the model learns from training data.
+
+Creates a neural network model.
+model = models.Sequential()
+model.add(layers.Dense(10, activation='relu', input_shape=(40,)))
+model.add(layers.Dense(10, activation='relu'))
+model.add(layers.Dense(10, activation='relu'))
+model.add(layers.Dense(1, activation='sigmoid'))
+This text describes a neural network model created with Keras Sequential API. The model has four layers: an input layer of size 40, three hidden layers with 10 neurons each using ReLU activation, and an output layer with a single neuron using sigmoid activation for binary classification.
+
+Neural networks are effective for learning complex patterns in data and are applied in image recognition, natural language processing, and predictive analytics.
+
+The Sequential API in Keras is used to build a feedforward neural network model. Dense layers are employed for fully connected layers, allowing each neuron to connect with all neurons in the previous layer. ReLU activation adds non-linearity for learning data patterns. The final layer uses sigmoid activation for binary classification tasks to predict outcomes like yes/no or 0/1.
+
+The code defines and compiles the neural network model with the specified architecture and activation functions. It can be trained on data to predict outcomes in binary classification tasks.
+
+Displays summary of model architecture.
+model.summary()
+Model: "sequential_2"
+_________________________________________________________________
+Layer (type)                 Output Shape              Param #   
+=================================================================
+dense_4 (Dense)              (None, 10)                410       
+_________________________________________________________________
+dense_5 (Dense)              (None, 10)                110       
+_________________________________________________________________
+dense_6 (Dense)              (None, 10)                110       
+_________________________________________________________________
+dense_7 (Dense)              (None, 1)                 11        
+=================================================================
+Total params: 641
+Trainable params: 641
+Non-trainable params: 0
+_________________________________________________________________
+The model.summary() function presents a comprehensive overview of the neural network model, detailing its architecture including layers, shapes, parameter counts, and interconnections. This summary aids in debugging and enhancing comprehension of the model. Analyzing this information is essential for optimizing the neural network architecture for improved performance and efficacy. Reviewing the model summary is a common practice in the model development phase to verify the network’s design and make any required modifications.
+
+Compile model with MSE loss and SGD optimizer using 0.01 learning rate, Accuracy metric.
+model.compile(loss='mse',
+              optimizer = optimizers.SGD(learning_rate=0.01),
+              metrics=['accuracy'])
+This text explains how to compile a neural network model for training. During compilation, we specify the loss function, optimizer, and evaluation metrics for the model. The mean squared error (MSE) loss function is commonly used for regression tasks, stochastic gradient descent (SGD) is a standard optimization algorithm, and accuracy is a typical metric for evaluating classification models. Compiling a model sets up the necessary components for the training process.
+
+Trains a model with data.
+hist = model.fit(x_train.T, y_train, batch_size=x_train.size, epochs=10000, validation_data=(x_test.T, y_test))
+The fit method is used in machine learning to train a model with training data (x_train) and labels (y_train).
+
+The batch_size parameter determines the number of samples per gradient update. In this case, the code uses x_train.size as the batch size.
+
+The epochs parameter sets the number of times the model trains on the entire dataset. In this code, it is set to 10,000 epochs, meaning the model iterates over the training data 10,000 times.
+
+The validation_data parameter provides a validation dataset to assess the model’s performance during training. In this instance, x_test.T and y_test are used for validation.
+
+Overall, the code trains a machine learning model with x_train and y_train data, validates it with x_test and y_test data for 10,000 epochs using a specified batch size. Training a model is crucial in machine learning for making predictions, and validation is essential for evaluating the model’s performance and generalization on unseen data.
+
+To create the Convolutional Neural Network, you can specify the number of training epochs, for example, setting it to 200.
+
+In this section, we will create a Convolutional Neural Network (CNN). CNNs are typically applied to visual images and classifications, but can also be used for regression tasks like this. To utilize the CNN, we will need to adjust the shape of our input and output data, and then reorganize the train-test split.
+
+Define neural network model and metrics.
+from keras.models import Sequential
+from keras.layers import Dense, Conv1D, Flatten
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+This text discusses the necessary libraries for building and training a neural network model with Keras:
+
+The Sequential class from keras.models creates a linear stack of layers in a neural network model.
+Different types of layers such as Dense, Conv1D, and Flatten from keras.layers can be added to a neural network.
+The train_test_split function from sklearn.model_selection splits the data into training and testing sets for model validation.
+The mean_squared_error function from sklearn.metrics calculates the mean squared error between the actual and predicted values.
+matplotlib.pyplot is used for plotting graphs to visualize model performance.
+These libraries enable efficient construction, training, and evaluation of neural network models, facilitating working with intricate data and making predictions in diverse machine learning tasks.
+
+This code reshapes data for prediction.
+stock = df.iloc[:1760,:]
+window = 10
+data = stock.to_numpy() 
+result = []
+    
+for index in range(len(data) - window): # maxmimum date = lastest date - sequence length
+    result.append(data[index: index + window]) # index : index + n days
+    
+result = np.array(result).reshape(4*window, -1)
+x = result.T
+y = data[window:,3]
+print(x.shape)
+print(y.shape)
+(1750, 40)
+(1750,)
+This snippet outlines the process of preparing a dataset for a machine learning model by structuring the input features x and the target variable y:
+
+Selects the first 1760 rows of the DataFrame df and assigns it to ‘stock’.
+Sets a window size of 10 days to create sequences of the stock data.
+Converts the ‘stock’ DataFrame to a NumPy array called ‘data’.
+Initializes an empty list ‘result’ to store the data sequences.
+Iterates through the ‘data’ array to create sequences of length ‘window’, adding each sequence to the ‘result’ list.
+Reshapes the ‘result’ list of sequences into a 2D NumPy array with a specific shape (4*window, -1).
+Transposes ‘result’ and assigns it to x.
+Extracts the target variable y, which is the 4th column of the data starting from the (window+1)th row until the end.
+Displays the shapes of the input features x and target variable y.
+This code is helpful for preparing data in a format suitable for training machine learning models, especially for sequential data like time series. It aids in creating input-output pairs or sequences that the model can learn from. In this instance, the code organizes stock data into 10-day sequences for input features and uses the price on the 11th day as the target variable.
+
+The feature data is in a two-dimensional shape of (1750, 40), indicating 1750 observations and 40 variables. When making regression predictions in CNN, the Conv1D model in Keras must be used. To convert the input to one-dimensional, an additional dimension can be added, treating the entire data as a single input row.
+
+Reshapes the array to add dimension.
+x = x.reshape(x.shape[0], x.shape[1], 1)
+print(x.shape)
+(1750, 40, 1)
+This procedure modifies a NumPy array, x, by including a new dimension of size 1 at the end. The original array has x.shape[0] rows and x.shape[1] columns. Post-reshaping, the array’s shape changes to (x.shape[0], x.shape[1], 1), introducing an additional dimension at the end with a size of 1.
+
+Such a transformation is beneficial when tasks necessitate specific shapes or dimensions in the data. For instance, in machine learning applications, altering data shape is often crucial for supplying it to neural networks or other machine learning models anticipating input data in a specific form. In such instances, appending a new dimension might become necessary to align with the anticipated input shape of a particular model or function.
+
+Next, we can split the data into a training set and a testing set using a 90% cut-off.
+
+Splits data into train and test.
+x_train_cnn, x_test_cnn, y_train_cnn, y_test_cnn=train_test_split(x, y, test_size=0.1) 
+print(x_train_cnn.shape)
+print(x_test_cnn.shape)
+print(y_train_cnn.shape)
+print(y_test_cnn.shape)
+(1575, 40, 1)
+(175, 40, 1)
+(1575,)
+(175,)
+The input data x and target data y are being split into training and testing sets using the train_test_split function from the scikit-learn library. The test_size=0.1 parameter indicates that 10% of the data will be used for testing and the remaining 90% for training.
+
+The code then displays the shapes of the training and testing sets for both the input data (x_train_cnn, x_test_cnn) and the target data (y_train_cnn, y_test_cnn).
+
+Splitting data into training and testing sets is crucial in machine learning for evaluating model performance. The training set is used for model training, while the testing set is used to assess how well the model generalizes to new data. This practice helps prevent overfitting and provides a more accurate evaluation of the model’s performance.
+
+After reshaping the data, we can implement a 1-dimensional convolution model and train it using the training data.
+
+We start by including a Conv1D layer with an input shape of (40, 1) to accommodate the data’s new shape. The activation function used is ReLU.
+Following this, a flatten layer is added to prepare the data for subsequent calculations.
+Next, a dense layer with ReLU activation is included.
+Finally, the model is compiled, and the loss is computed using the ADAM optimizer.
+Creates and compiles a simple neural network.
+model = Sequential()
+model.add(Conv1D(32, 2, activation="relu", input_shape=(40, 1)))
+model.add(Flatten())
+model.add(Dense(64, activation="relu"))
+model.add(Dense(1))
+model.summary()
+model.compile(loss="mse", optimizer="adam")
+Model: "sequential_3"
+_________________________________________________________________
+Layer (type)                 Output Shape              Param #   
+=================================================================
+conv1d_2 (Conv1D)            (None, 39, 32)            96        
+_________________________________________________________________
+flatten_2 (Flatten)          (None, 1248)              0         
+_________________________________________________________________
+dense_8 (Dense)              (None, 64)                79936     
+_________________________________________________________________
+dense_9 (Dense)              (None, 1)                 65        
+=================================================================
+Total params: 80,097
+Trainable params: 80,097
+Non-trainable params: 0
+_________________________________________________________________
+This description illustrates the construction of a Convolutional Neural Network (CNN) model for a regression task using the Keras library in Python:
+
+The Sequential() function initializes a neural network model, allowing layers to be added sequentially.
+model.add(Conv1D(32, 2, activation="relu", input_shape=(40, 1))) introduces a 1D convolutional layer with 32 filters, each measuring 2 units, and employs the ReLU activation function. The input data shape is specified as (40, 1), indicating 40 time steps and one feature dimension.
+model.add(Flatten()) includes a flatten layer to convert the output from the convolutional layer into a 1D array, ready for input into a fully connected layer.
+model.add(Dense(64, activation="relu")) appends a fully connected layer with 64 neurons and ReLU activation.
+model.add(Dense(1)) adds the output layer with a single neuron, suitable for continuous prediction in a regression task.
+model.compile(loss="mse", optimizer="adam") compiles the model, defining mean squared error (MSE) as the loss function for regression, and Adam as the optimizer - a widely used algorithm in neural networks.
+Running model.summary() provides a summary of the model architecture, displaying layers, output shapes, and parameter counts.
+This CNN model is tailored for regression tasks on time-based (1D) input data, aiming to forecast continuous output values. Convolutional layers assist in recognizing spatial patterns, while dense layers consolidate this information for final predictions. Compiling the model sets the groundwork for training, defining suitable loss functions and optimization approaches.
+
+Once the model has been created, we can train it using the training data and make predictions.
+
+Fit a neural network model.
+hist = model.fit(x_train_cnn, y_train_cnn, batch_size=12,epochs=200, validation_data=(x_test_cnn, y_test_cnn))
+In this process, the fit method is being employed on a model object to train the model with the given training data (x_train_cnn, y_train_cnn).
+
+Here’s an explanation of how this operation works:
+
+model.fit: This function is utilized to train a machine learning model. During training, the model recognizes patterns in the input data (features) and their corresponding labels or outputs.
+x_train_cnn, y_train_cnn: These are the inputs (x_train_cnn) and labels (y_train_cnn) of the training data used to train the model.
+batch_size=12: The training data is segmented into small batches, each consisting of a specific number of samples. This parameter determines the number of samples per gradient update, with 12 samples per batch in this case.
+epochs=200: An epoch signifies one complete iteration through the entire training dataset. This parameter specifies the number of epochs for which the model will undergo training. In this instance, the model will be trained for 200 epochs.
+validation_data=(x_test_cnn, y_test_cnn): Additional validation data can be provided to assess the model’s performance on a distinct dataset during training. In this scenario, the validation data (x_test_cnn, y_test_cnn) is utilized.
+This code is essential for training the model with the specified data to understand the underlying patterns and connections within the training set. By defining parameters such as batch size and epochs, and supplying validation data, we can manage training configurations and monitor the model’s progress during training. The fit method adjusts the model’s parameters based on the training data and associated labels.
+
+Generate predictions using CNN model.
+y_pred_cnn = model.predict(x_test_cnn)
+This machine learning model predicts output values based on the input data x_test_cnn. The model has been trained on a dataset and has learned patterns to make predictions for tasks like classification, regression, or other predictive analyses.
+
+Specifically, the model in this case is a Convolutional Neural Network (CNN) commonly used for image tasks due to its ability to learn spatial hierarchies of features. By using model.predict(x_test_cnn), the trained CNN model predicts output values for the test dataset x_test_cnn, which usually contains images for tasks like image classification, object detection, etc.
+
+Using this approach enables the utilization of machine learning models to predict outcomes on new data, facilitating automated decision-making processes, enhanced accuracy, and insights from data analysis.
+
+Evaluate, plot and display model predictions.
+print(model.evaluate(x_train_cnn, y_train_cnn))
+ 
+print("MSE: %.4f" % mean_squared_error(y_test_cnn, y_pred_cnn))
+x_ax = range(len(y_pred_cnn))
+plt.scatter(x_ax, y_test_cnn, s=5, color="blue", label="original")
+plt.plot(x_ax, y_pred_cnn, lw=0.8, color="red", label="predicted")
+plt.legend()
+plt.show()
+50/50 [==============================] - 0s 1ms/step - loss: 0.0019
+0.0019289364572614431
+MSE: 0.0031
+
+This explanation is related to evaluating a machine learning model and visualizing its predictions. Here’s what the process includes:
+
+Evaluating the model’s performance on the training data using model.evaluate(x_train_cnn, y_train_cnn). The evaluation metrics depend on how the model was compiled, such as accuracy or loss.
+Calculating the mean squared error between the actual target values (y_test_cnn) and the predicted values (y_pred_cnn) using the mean_squared_error function. Mean squared error is a standard metric for regression models.
+Creating a scatter plot to compare the original target values (y_test_cnn) with the predicted values (y_pred_cnn). The x-axis represents the data points, and the y-axis represents the target values. The scatter plot displays actual values in blue dots and predicted values in red lines.
+This approach is used to assess the machine learning model’s performance, especially in regression tasks. It allows for comparing actual and predicted values both visually and through quantitative metrics like mean squared error. The visualization aids in understanding how well the model generalizes to new data and identifying any patterns or discrepancies in the predictions.
+
+The CNN model produced excellent results, with a mean squared error (MSE) of 0.3%. The comparison between the original and predicted values is shown in the plot above.
+
+Conclusion
+In conclusion, the application of Convolutional Neural Networks (CNNs) to stock market prediction showcases the remarkable adaptability and efficacy of deep learning techniques beyond their traditional domains, such as image and speech recognition. This exploration into financial time series analysis using CNNs not only highlights the potential for achieving high precision in predicting stock price movements but also opens up new avenues for utilizing advanced machine learning models in the financial sector.
+
+By meticulously preprocessing the data, employing a tailored CNN architecture, and rigorously training the model, we demonstrated the ability to closely predict stock market trends with a mean squared error of just 0.3%. Such accuracy is indicative of the model’s proficiency in capturing the underlying patterns within the historical stock data, thereby providing valuable insights for investors and financial analysts alike.
+
+Furthermore, the process outlined in this study — from data normalization and windowing to model training and evaluation — serves as a comprehensive guide for researchers and practitioners aiming to apply deep learning techniques in their financial analyses. The favorable outcome achieved emphasizes the importance of selecting appropriate model architectures and hyperparameters tailored to the specific characteristics of financial time series data.
+
+As we look to the future, the integration of deep learning models like CNNs into financial analysis and prediction tools holds great promise for enhancing decision-making processes and investment strategies. However, it also invites further investigation into the interpretability of these models and the exploration of hybrid approaches that combine traditional financial analysis techniques with cutting-edge machine learning algorithms. Embracing these advancements, the financial industry can move towards a more data-driven, predictive approach, unlocking new potentials for growth and innovation.

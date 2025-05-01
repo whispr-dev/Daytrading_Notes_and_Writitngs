@@ -1,0 +1,151 @@
+
+Beating the S&P with Mean Reversion
+Amal Tyagi
+Amal Tyagi
+
+·
+Follow
+
+7 min read
+·
+Mar 15, 2024
+599
+
+
+1
+
+
+
+
+
+(Read with no paywall here.)
+
+Outperforming the market is famously difficult. It’s easy to see that for many people, the best investment strategy might just be to buy and hold the S&P 500. Funds like Vanguard’s VTI offer low fees, relatively stable and increasing dividends, and a sense of comfort knowing your portfolio is protected by the strongest economy in the world.
+
+
+History of S&P 500 market cycles, alternating between uptrending and ranging periods.
+But even the most profitable assets and markets need to cool off every so often, and the S&P 500 is not immune to exhaustion—nor is it immune to unpredictable macroeconomic and geopolitical events. While it’s impossible to know when the next exhaustion phase will occur, history suggests that we’re around halfway through our current ~16-year uptrend.
+
+So your portfolio will probably keep going up regardless of this year’s impending correction, but it may lose its momentum altogether within the next decade as we enter another “range-bound” (rather than a “trending”) period. This will be the time when we can beat the market rather easily.
+
+
+I’ve recently backtested a strategy which mitigates risk by significantly reducing our time in the market. We’ll simulate buying an asset when strict conditions are met—specifically, when a custom mean reversion indicator shows an oversold market. We can then take quick profits and wait for the next oversold period, which will always come eventually…
+
+This means you may miss out on some fast growth periods, like the recent bullish rally we’ve seen in semiconductors and cloud. But it also means you’ll suffer less from the eventual downturns, as shown in the backtest.
+
+What Are Mean Reversals?
+At its core, mean reversion is the theory that prices and returns eventually move back towards the mean, or average. As with Bollinger breakouts, mean reversals are indicative of market cycles and the psychology behind people and computers trying to find the true price of an asset. Since equilibrium is never maintained for long, we can use these forms of astrology (sorry, “technical analysis”) to learn from history and capture gains in the future.
+
+There are several indicators we can use to identify potential mean reversals. Bollinger bands are one of them, and we’ll be using a variation of them today. We’ll also focus on Internal Bar Strength. Commonly used for shorter-term trading decisions, IBS suggests whether daily closing price indicates a bullish or bearish sentiment for that day. It’s effective and easy to calculate:
+
+
+If a price closes nearer to the daily low vs. the daily high, its IBS value will be less than .5, with a value of 0 indicating that the price closed at the low point itself. For today’s purposes we can consider any value below .6 to be a potential bearish sentiment, which, in the context of mean reversion for stable assets like the S&P 500, suggests that it could go back up again soon.
+
+Our variation of the Bollinger Band will use recent history, rather than just a single day, in determining when a mean reversal is likely. This band will rely on a 25-day moving average of high prices, and its deviation from the scaled range of high and low moving average prices.
+
+
+where
+
+
+Trading Mean Reversals
+You might calculate your indicators with Python as follows:
+
+data['IBS'] = (data['Close'] - data['Low']) / (data['High'] - data['Low'])
+data['HL_avg'] = data['High'].rolling(window=25).mean() - data['Low'].rolling(window=25).mean()
+data['Band'] = data['High'].rolling(window=25).mean() - (data['HL_avg'] * 2.25)
+Since the band is a lagging indicator, you won’t have values for the first 25 days. Slice them off when implementing the following algorithm:
+
+From your list of tickers, fetch the last several years of daily candlestick prices. Be sure to retain high, low, and close prices.
+For every day, simulate buying a stock if its IBS is below 0.6 and the closing price is below our custom band. For simplicity, we can assume the after-hours price to be the same as the close price for that day, but in actual trading it might be better to just buy right before close.
+Simulate selling on any day on which the price closes higher than the previous day’s high. Remember to account for fees.
+Test different timeframes to determine whether the strategy has outperformed the asset price in the long term. Once you find stable returns, you’ll be ready to trade on real-time reversal signals!
+This is a starting point to replicate my results:
+
+import yfinance as yf
+import pandas as pd
+
+# Backtesting parameters (adjust as needed)
+tickers = ['^GSPC']
+periods = ['5y', '10y', '25y']
+init_portfolio_value = 1000 # USD
+
+for period in periods:
+    for ticker in tickers:
+        try:
+            data = yf.download(ticker, period=period, progress=False)
+
+            # Calculate indicators
+            data['HL_avg'] = data['High'].rolling(window=25).mean() - data['Low'].rolling(window=25).mean()
+            data['IBS'] = (data['Close'] - data['Low']) / (data['High'] - data['Low'])
+            data['Band'] = data['High'].rolling(window=25).mean() - (data['HL_avg'] * 2.25)
+        except:
+            continue
+
+        # Initialize variables for trading strategy
+        portfolio_value, portfolio_values = init_portfolio_value, [init_portfolio_value]
+        trades = {'Entry': [], 'Exit': []}
+        fees = 0
+        position = False
+        entry_price = 0
+
+        # Simulate buying and selling using mentioned strategy
+        for i in range(25, len(data)):
+            if not position and data['Close'][i] < data['Band'][i] and data['IBS'][i] < 0.6: # Buy
+                position = True
+                entry_price = data['Close'][i]
+                shares = portfolio_values[-1] / entry_price
+                trades['Entry'].append(data.index[i])
+            elif position and data['Close'][i] > data['High'][i - 1]: # Sell
+                position = False
+                exit_price = data['Close'][i]
+                sale_value = shares * exit_price
+                fee = max(.01, round((sale_value / 1000) * .01, 2))
+                fees += fee
+                trade_profit = shares * (exit_price - entry_price) - fee
+                portfolio_value += trade_profit
+                trades['Exit'].append(data.index[i])
+
+            portfolio_values.append(portfolio_value)
+
+        mean_reversal_return = portfolio_values[-1] / init_portfolio_value
+        buy_and_hold_return = data['Close'].iloc[-1] / data['Close'].iloc[0]
+
+        print(f'{ticker} made {mean_reversal_return*100:.1f}% return vs. {buy_and_hold_return*100:.1f}% in {period} time')
+Results
+^GSPC made 157.7% return vs. 180.6% in 5y time
+^GSPC made 226.8% return vs. 275.3% in 10y time
+^GSPC made 471.3% return vs. 391.7% in 25y time
+On the shorter timeframes, we appear to track—and occasionally underperform—the market. This is because we avoid taking part in heavily bullish periods, and instead focus on making small gains in response to recent losses.
+
+
+Our theory suggests that this year’s bull rally is just another unsustainable deviation which may not last. Over the long term, asset price will revert back to the mean and keeping this in mind will allow us to outperform it.
+
+Sure enough, our strategy beats the market by 79.6% over 25 years.
+
+
+This shows that our mean reversion method works best in trading ranges and bearish breakouts, giving us the ability to reduce drawdown in periods like the dot-com or housing bubble bursts.
+
+We can extend our algorithm to allow for shorts under opposite conditions to get an even higher return (619% over 25 years as opposed to 414% from buying and holding). Shorting can be risky, though, so we won’t consider it for just any asset.
+
+
+Short trades marked with slightly lighter red and green markers.
+Our simulation also hints at the fact that the COVID drop may not have been the biggest one of the decade. At least for stocks, recovery from the pandemic only took a year, and the events in March 2020 were not enough to put any real dent in the overall uptrend. Otherwise, mean reversal would have been more effective in the past 5 years, as it would have been applied over a ranging market!
+
+More Results
+Mean reversion can be used to trade several other assets and asset classes, like individual stocks, ETFs, and forex. While “Magnificent 7” stocks like Nvidia and Microsoft weren’t beaten by our strategy, there are thousands of other assets which seem to more closely align with mean reversion theory over an extended timeframe.
+
+Here’s how you could have profited 87% trading PayPal over the last 5 years, rather than taking a 40% loss by buying and holding:
+
+
+This is our strategy outperforming Verizon in its shift from a high-growth phase to a seemingly-endless trading range:
+
+
+And while I’m confident Buffet wouldn’t approve of this strategy, here’s how we could have outperformed him on Coca-Cola in the past 25 years:
+
+
+Buffet would have to pay significant transaction fees and would probably want to keep his dividends anyway.
+Finally, as a bonus, note that the returns seem to be pretty good for forex, where technical analysis on ranging behavior is crucial:
+
+
+Short sells have been added since it makes sense to trade stable currency pairs this way.
+Thank you for following along, and trade responsibly!

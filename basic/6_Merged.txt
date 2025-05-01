@@ -1,0 +1,189 @@
+📊 The Beginner's Blueprint to Day Trading with Python
+Part 6: Build a Custom Stock Screener from Scratch (DIY Finviz Edition)
+✦ What’s a Stock Screener?
+A stock screener helps you filter thousands of stocks down to the few that match your unique trading criteria.
+
+It answers questions like:
+
+Which stocks are trading near their 52-week highs?
+
+Which are oversold (low RSI)?
+
+Which large-caps are setting up for breakouts?
+
+Which have unusual volume or clean trend structure?
+
+Most traders rely on screeners like Finviz, but here, you’ll build your own screener in Python — faster, tailored, and flexible enough to grow with your strategy logic.
+
+✦ Screener Features
+We’ll build a script that:
+
+✅ Loads S&P 500 tickers from Wikipedia
+
+✅ Fetches 1 year of historical data via yfinance
+
+✅ Calculates:
+
+52-week high and low
+
+Distance from 52W high
+
+Market cap
+
+RSI
+
+Relative position in range
+
+Market cap class (Nano → Mega)
+
+✅ Filters by criteria (e.g., near highs, RSI under 70, market cap > $10B)
+
+✅ Saves both full and filtered results to .csv and .xlsx
+
+🛠️ Full Python Script: strategies/stock_screener_v2.py
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# 1. Load S&P 500 tickers
+sp500 = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
+tickers = [t.replace('.', '-') for t in sp500['Symbol'].tolist()]
+
+# 2. Time window
+end = datetime.today()
+start = end - timedelta(days=365)
+
+# 3. RSI function
+def calculate_rsi(close_prices, period=14):
+    delta = close_prices.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+# 4. Screener logic
+results = []
+
+for symbol in tickers:
+    try:
+        print(f"Fetching: {symbol}")
+        data = yf.download(symbol, start=start, end=end, progress=False)
+        if data.empty or len(data) < 100:
+            continue
+
+        close = data['Close']
+        high_52 = close.max()
+        low_52 = close.min()
+        current = close[-1]
+        percent_from_high = 100 * (high_52 - current) / high_52
+        rsi = calculate_rsi(close).iloc[-1]
+
+        info = yf.Ticker(symbol).info
+        market_cap = info.get("marketCap", np.nan)
+
+        def classify_market_cap(cap):
+            if cap < 50e6: return 'Nano'
+            if cap < 300e6: return 'Micro'
+            if cap < 2e9: return 'Small'
+            if cap < 10e9: return 'Mid'
+            if cap < 200e9: return 'Large'
+            return 'Mega'
+
+        cap_class = classify_market_cap(market_cap)
+
+        results.append({
+            'Ticker': symbol,
+            'Current Price': round(current, 2),
+            '52W High': round(high_52, 2),
+            '52W Low': round(low_52, 2),
+            '% From High': round(percent_from_high, 2),
+            'RSI': round(rsi, 2),
+            'Market Cap ($B)': round(market_cap / 1e9, 2) if market_cap else np.nan,
+            'Cap Class': cap_class
+        })
+
+    except Exception as e:
+        print(f"Error on {symbol}: {e}")
+        continue
+
+# 5. Convert to DataFrame
+df = pd.DataFrame(results)
+
+# 6. Filter screen: breakout watch
+filtered = df[
+    (df['% From High'] < 10) &
+    (df['RSI'] < 70) &
+    (df['Market Cap ($B)'] > 10)
+].sort_values('% From High')
+
+# 7. Save both versions
+timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+df.to_excel(f"outputs/full_sp500_screen_{timestamp}.xlsx", index=False)
+filtered.to_excel(f"outputs/filtered_screen_{timestamp}.xlsx", index=False)
+
+print(f"✅ Done! Saved to: outputs/filtered_screen_{timestamp}.xlsx")
+🧠 Output Columns
+
+Ticker	Price	52W High	% From High	RSI	Market Cap	Cap Class
+AAPL	175.50	181.50	3.3%	56	2900	Mega
+NVDA	640.00	650.00	1.5%	69	1700	Mega
+Interpretation: AAPL is ~3.3% from its 52W high, RSI is neutral, and it's a mega-cap. Great breakout candidate on volume.
+
+🧪 Filter Variants to Try
+🔻 Oversold Dip Finder:
+python
+Copy
+Edit
+filtered = df[
+    (df['% From High'] > 20) &
+    (df['Market Cap ($B)'] < 5) &
+    (df['RSI'] < 30)
+]
+💸 Mega-Cap Consolidation:
+python
+Copy
+Edit
+filtered = df[
+    (df['Market Cap ($B)'] > 100) &
+    (df['% From High'] < 5)
+]
+💡 What Else Can You Add?
+✴️ MACD histogram
+
+📊 ATR-based volatility rank
+
+📈 Moving average crossovers
+
+🧠 Sentiment model output
+
+🕒 Earnings date proximity
+
+🔬 Sector filtering (via info['sector'])
+
+Your screener can evolve into a signal engine for your trading bot.
+
+📁 Output Structure
+bash
+Copy
+Edit
+outputs/
+├── full_sp500_screen_<timestamp>.xlsx
+└── filtered_screen_<timestamp>.xlsx
+✨ Coming Up in Part 7
+We shift gears into options with visual math models:
+
+Understand binary options
+
+Build step-function payoffs
+
+Price them using Black-Scholes
+
+Use them for forecasting & strategy logic
+
+You’re about to unlock the math behind options — visually and interactively.

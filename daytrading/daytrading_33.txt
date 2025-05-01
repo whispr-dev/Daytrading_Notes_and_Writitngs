@@ -1,0 +1,165 @@
+Momentum Strategy using Python
+Manish Peshwani
+InsiderFinance Wire
+Manish Peshwani
+
+·
+Follow
+
+Published in
+InsiderFinance Wire
+
+·
+5 min read
+·
+Jun 21, 2024
+256
+
+
+5
+
+
+
+
+
+This week I had an interesting conversation with some of my colleagues at lunch table. They asked me on what methodology I use for investing. I mentioned to them that I use ‘Momentum Investing’, but they found it a bit difficult to understand what it exactly means. So I decided to write this article to capture the steps that I follow for momentum investing.
+
+What is Momentum Investing?
+Momentum investing is a powerful strategy that aims to capitalize on the continuance of existing trends in the market. By focusing on stocks that have performed well in the past, investors can potentially ride the wave of momentum to achieve impressive returns. In this article, we will delve into a momentum strategy tailored for Nifty 50 stocks, detailing the methodology and providing Python code snippets to help you implement this strategy.
+
+Momentum investing is based on the premise that stocks that have performed well in the past will continue to do so in the near future. This strategy involves buying stocks that have shown strong performance over a specific period (say last 1 year) and holding them for a set duration (say 1 month) before re-evaluating the portfolio.
+
+Strategy Overview
+Our momentum strategy involves the following simple steps:
+
+Select the Universe of Stocks: Here we will focus on the Nifty 50 stocks.
+Calculate Past Returns: Compute the 12-month returns for each stock.
+Rank Stocks: Rank the stocks based on their 12-month returns.
+Select Top Stocks: Pick the top 10 stocks with the highest returns.
+Rebalance Monthly: Re-evaluate and rebalance the portfolio every month.
+Backtesting the strategy
+Backtesting is essential for evaluating the performance of a trading strategy. By applying the strategy to historical data, we can assess how it would have performed in the past and gain insights into its potential future performance.
+
+Lets backtest this strategy with python for a period of 3 years and compare its results with a buy and hold strategy in the index (here Nifty50)
+
+Step 1: Data Collection
+First, we need to collect historical price data for the Nifty 50 stocks over the past three years. Here I have used yahoo finance apis to get the historical data for the last 3 years.
+
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# List of Nifty 50 stock symbols
+nifty50_symbols = ["RELIANCE.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "TCS.NS", "KOTAKBANK.NS", 
+                   "HINDUNILVR.NS", "SBIN.NS", "BHARTIARTL.NS", "HDFC.NS", "ITC.NS", "BAJFINANCE.NS", 
+                   "ASIANPAINT.NS", "HCLTECH.NS", "LT.NS", "MARUTI.NS", "AXISBANK.NS", "ULTRACEMCO.NS", 
+                   "WIPRO.NS", "NESTLEIND.NS", "ONGC.NS", "TITAN.NS", "SUNPHARMA.NS", "M&M.NS", 
+                   "POWERGRID.NS", "JSWSTEEL.NS", "TATASTEEL.NS", "TECHM.NS", "HDFCLIFE.NS", "COALINDIA.NS", 
+                   "BPCL.NS", "INDUSINDBK.NS", "BAJAJ-AUTO.NS", "IOC.NS", "BRITANNIA.NS", "HEROMOTOCO.NS", 
+                   "ADANIPORTS.NS", "DRREDDY.NS", "GRASIM.NS", "CIPLA.NS", "DIVISLAB.NS", "EICHERMOT.NS", 
+                   "BAJAJFINSV.NS", "SHREECEM.NS", "TATAMOTORS.NS", "SBILIFE.NS", "ADANIENT.NS", 
+                   "DABUR.NS", "VEDL.NS", "APOLLOHOSP.NS"]
+
+# Define the time period
+end_date = datetime.today()
+start_date = end_date - timedelta(days=365*3)  # Last 3 years
+
+# Fetch data
+data = yf.download(nifty50_symbols, start=start_date, end=end_date)['Adj Close']
+
+# Fill missing values
+data = data.fillna(method='ffill').dropna()
+
+# Display the first few rows of the data
+print(data.head())
+Step 2: Implement the Strategy and Calculate Returns
+Next, we implement the momentum strategy and calculate the portfolio returns over the past three years.
+
+def calculate_portfolio_returns(data, top_n=10):
+    # Calculate monthly returns
+    monthly_returns = data.resample('ME').ffill().pct_change()
+    
+    # Calculate 12-month returns
+    twelve_month_returns = monthly_returns.rolling(window=12).apply(lambda x: np.prod(1 + x) - 1, raw=True)
+    
+    # Initialize an empty list to store monthly portfolio values
+    portfolio_values = []
+    
+    # Start with an initial capital
+    initial_capital = 100000  # 1 lakh
+    capital = initial_capital
+    
+    # Loop through each month starting from the 13th month
+    for i in range(12, len(twelve_month_returns)):
+        # Get the 12-month returns for the current month
+        current_returns = twelve_month_returns.iloc[i]
+        
+        # Rank the stocks by their 12-month returns
+        ranked_stocks = current_returns.sort_values(ascending=False)
+        
+        # Select the top N stocks
+        top_stocks = ranked_stocks.head(top_n).index
+        
+        # Calculate the equal weight for each stock
+        weight = 1 / top_n
+        
+        # Calculate the portfolio return for the current month
+        portfolio_return = (monthly_returns.iloc[i][top_stocks] * weight).sum()
+        
+        # Update the capital
+        capital = capital * (1 + portfolio_return)
+        
+        # Append the current capital to the portfolio values list
+        portfolio_values.append(capital)
+    
+    # Convert the portfolio values list to a pandas Series
+    portfolio_values = pd.Series(portfolio_values, index=twelve_month_returns.index[12:])
+    
+    return portfolio_values
+
+# Calculate the portfolio returns
+momentum_portfolio_returns = calculate_portfolio_returns(data)
+
+# Display the portfolio returns
+print(momentum_portfolio_returns)
+Step 3: Compare with Nifty 50 Index
+To evaluate the performance of the momentum strategy, we compare it with the returns of the Nifty 50 index over the same period.
+
+# Fetch Nifty 50 index data
+nifty50_index = yf.download("^NSEI", start=start_date, end=end_date)['Adj Close']
+
+# Calculate Nifty 50 monthly returns
+nifty50_monthly_returns = nifty50_index.resample('ME').ffill().pct_change()
+
+# Calculate Nifty 50 cumulative returns
+nifty50_cumulative_returns = (1 + nifty50_monthly_returns).cumprod()
+
+# Calculate momentum portfolio cumulative returns
+momentum_cumulative_returns = (1 + momentum_portfolio_returns.pct_change()).cumprod()
+
+# Plot the results
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(12, 6))
+plt.plot(momentum_cumulative_returns, label='Momentum Portfolio')
+plt.plot(nifty50_cumulative_returns, label='Nifty 50 Index', linestyle='--')
+plt.title('Momentum Portfolio vs Nifty 50 Index')
+plt.xlabel('Date')
+plt.ylabel('Cumulative Returns')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+Results and Analysis
+The plot above shows the cumulative returns of the momentum portfolio compared to the Nifty 50 index over the past three years. Here are some key observations:
+
+The momentum portfolio generally outperformed the Nifty 50 index during this period, demonstrating the effectiveness of the momentum strategy.
+There were periods of volatility where the momentum portfolio experienced significant fluctuations, which is typical for momentum-based strategies.
+Overall, the momentum strategy provided a higher return on investment compared to simply holding the Nifty 50 index.
+Conclusion
+The momentum investing strategy for Nifty 50 stocks has shown promising results over the past three years. By selecting the top 10 stocks based on their 12-month returns and rebalancing the portfolio monthly, the strategy outperformed the Nifty 50 index. However, it’s important to note that past performance is not indicative of future results, and investors should carefully consider their risk tolerance and investment objectives before implementing this strategy.
+
+By using the provided Python code snippets, you can backtest and customize this momentum strategy according to your preferences. Momentum investing can be a powerful tool in an investor’s arsenal, but it requires discipline and a systematic approach to achieve consistent success.
+
+If you are interested in understanding how you can measure the performance of any strategy like this one, then you can checkout this article ‘Measuring performance of your investment strategy using ffn python library’.

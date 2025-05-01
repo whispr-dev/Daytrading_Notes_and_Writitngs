@@ -1,0 +1,131 @@
+Automatic Hyperparameter Tuning with Sklearn Using Grid and Random Search
+Deep dive into GridSearch and RandomSearch classes of Scikit-learn
+Bex T.
+Towards Data Science
+Bex T.
+
+·
+Follow
+
+Published in
+Towards Data Science
+
+·
+6 min read
+·
+Mar 5, 2021
+161
+
+
+1
+
+
+
+
+
+
+Photo by Helena Lopes on Pexels
+What is a hyperparameter?
+Today, algorithms that hide a world of math under the hood can be trained with only a few lines of code. Their success depends first on the data trained and then, on what hyperparameters were used by the user. So, what are these hyperparameters?
+
+Hyperparameters are user-defined values like k in kNN and alpha in Ridge and Lasso regression. They strictly control the fit of the model and this means, for each dataset, there is a unique set of optimal hyperparameters to be found. The most basic way of finding this perfect set would be randomly trying out different values based on gut feeling. However, as you might guess, this method quickly becomes useless when there are many hyperparameters to tune.
+
+Instead, today you will learn about two methods for automatic hyperparameter tuning: Random search and Grid search. Given a set of possible values for all hyperparameters of a model, a Grid search fits a model using every single combination of these hyperparameters. What is more, in each fit, the Grid search uses cross-validation to account for overfitting. After all combinations are tried, the search retains the parameters that resulted in the best score so that you can use them to build your final model.
+
+Random search takes a bit different approach than Grid. Instead of exhaustively trying out every single combination of hyperparameters, which can be computationally expensive and time-consuming, it randomly samples hyperparameters and tries to get closer to the best set.
+
+Fortunately, Scikit-learn provides GridSearchCV and RandomizedSearchCV classes that make this process a breeze. Today, you will learn all about them!
+
+Join Medium with my referral link - BEXGBoost
+Get exclusive access to all my ⚡premium⚡ content and all over Medium without limits. Support my work by buying me a…
+ibexorigin.medium.com
+
+Get the best and latest ML and AI papers chosen and summarized by a powerful AI — Alpha Signal:
+
+Alpha Signal | The Best of Machine Learning. Summarized by AI.
+Stay in the loop without spending countless hours browsing for the next breakthrough; our algorithm identifies the…
+alphasignal.ai
+
+Prepping the Data
+We will be tuning a RandomForestRegressor model on the Iowa housing dataset. I chose Random Forests because it has large enough hyperparameters that make this guide more informative but the process you will be learning can be applied to any model in the Sklearn API. So, let’s start:
+
+
+png
+The target is SalePrice. For simplicity, I will choose only numeric features:
+
+
+First, both training and test sets contain missing values. We will use SimpleImputer to deal with them:
+
+
+Now, let’s fit a base RandomForestRegressor with default parameters. As we will use the test set only for final evaluation, I will create a separate validation set using the training data:
+
+
+Note: The main focus of this article is on how to perform hyperparameter tuning. We won’t worry about other topics like overfitting or feature engineering but only narrow down on how to use Random and Grid search so that you can apply automatic hyperparameter tuning in real-life setting.
+
+We got a 0.83 for R2 on the test set. We fit the regressor only with default parameters which are:
+
+
+That’s a lot of hyperparameters. We won’t be tweaking all of them but focus only on the most important ones. Specifically:
+
+n_esimators - number of trees to be used
+max_feauters - the number of features to use at each node split
+max_depth: the number of leaves on each tree
+min_samples_split: the minimum number of samples required to split an internal node
+min_samples_leaf: the minimum number of samples in each leaf
+bootstrap: method of sampling - with or without replacement.
+Both Grid Search and Random Search tries to find the optimal values for each of these hyperparameters. Let’s see this in action first with Random Search.
+
+Randomized Search with Sklearn RandomizedSearchCV
+Scikit-learn provides RandomizedSearchCV class to implement random search. It requires two arguments to set up: an estimator and the set of possible values for hyperparameters called a parameter grid or space. Let's define this parameter grid for our random forest model:
+
+
+This parameter grid dictionary should have hyperparameters as keys in the syntax they appear in the model’s documentation. The possible values can be given as an array.
+
+Now, let’s finally import RandomizedSearchCV from sklearn.model_selection and instantiate it:
+
+
+Apart from the accepted estimator and the parameter grid, it has n_iter parameter. It controls how many iterations of random picking of hyperparameter combinations we allow in the search. We set it to 100, so it will randomly sample 100 combinations and return the best score. We are also using 3-fold cross-validation with the coefficient of determination as scoring which is the default. You can pass any other scoring function from sklearn.metrics.SCORERS.keys(). Now, let's start the process:
+
+Note, since Randomized Search performs cross-validation, we can fit it on the training data as a whole. Because of how CV works, it will create separate sets for training and evaluation. Also, I am setting n_jobs to -1 to use all cores on my machine.
+
+
+After ~17 minutes of training, the best params found can be accessed with .best_params_ attribute. We can also see the best score:
+
+>>> random_cv.best_score_
+0.8690868090696587
+We got around 87% coefficient of determination which is an improvement of 4% over the base model.
+
+Sklearn GridSearchCV
+You should never choose your hyperparameters according to the results of the RandomSearchCV. Instead, only use it to narrow down the value range for each hyperparameter so that you can provide a better parameter grid to GridSearchCV.
+
+Why not use GridSearchCV right from the beginning, you ask? Well, looking at the initial parameter grid:
+
+
+There are 13680 possible hyperparam combinations and with a 3-fold CV, the GridSearchCV would have to fit Random Forests 41040 times. Using RandomizedGridSearchCV, we got reasonably good scores with just 100 * 3 = 300 fits.
+
+Now, time to create a new grid building on the previous one and feed it to GridSearchCV:
+
+
+This time we have:
+
+
+240 combinations which is still a lot but we will go with it. Let’s import GridSearchCV and instantiate it:
+
+
+I didn’t have to specify scoring and cv because we were using the default settings so don't have to specify. Let's fit and wait:
+
+
+After 35 minutes, we get the above scores, this time — truly the most optimal scores. Let’s see how much they differ from RandomizedSearchCV:
+
+>>> grid_cv.best_score_
+0.8696576413066612
+Are you surprised? Me too. The difference in results is marginal. However, this might be just a specific case to the given dataset.
+
+When you have computation-heavy models in practice, it is best to get the results of random search and validate them in grid search within a tighter range.
+
+Conclusion
+At this point, you might be thinking that all this is great. You got to learn tuning models without even giving a second glance at what actually parameters do and still find their optimal values. But this automation comes at a great cost: it is both computation-heavy and time-consuming.
+
+You might be okay to wait a few minutes for it to finish as we did here. But, our dataset had only 1500 samples. Still, finding the best parameter took us almost an hour if you combine both grid and random searches. Imagine how much you have to wait for large datasets out there.
+
+So, Grid search and Random search for smaller datasets? Hands-down yes! For large datasets, you need to take a different approach. Fortunately, ‘the different approach’ is already covered by Scikit-learn… again. That’s why my next post is going to be on HalvingGridSearchCV and HalvingRandomizedSearchCV. Stay tuned!

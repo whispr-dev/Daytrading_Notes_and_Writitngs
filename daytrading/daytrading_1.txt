@@ -1,0 +1,674 @@
+Analysing stock data in Python
+A step-by-step guide to understanding time series and applying forecasting method on Yahoo finance dataset
+Nivedita Bhadra
+Nivedita Bhadra
+
+·
+Follow
+
+15 min read
+·
+Sep 5, 2024
+20
+
+
+1
+
+
+
+
+
+Stock data consists of points collected or recorded at specific intervals, such as daily stock price, quarterly earnings reports, annual GDP figures, etc.
+
+Analyzing stock data is crucial for investors, analysts, and financial professionals. It helps them make informed decisions about buying, selling, or holding stocks. By understanding previous prices, trends, and patterns, investors can make decisions minimizing risks and maximizing returns. Also, identifying potential risks also allow them to adjust their portfolios.
+
+Although not always, stock data is often, considered time series data. In this article, we will perform a time-series analysis of Yahoo Finance data which can essentially be viewed as a time-series data.
+
+About the dataset
+
+Yahoo Finance is a popular platform and an excellent resource for beginners who want to start understanding stock data using time series analysis methods. The data can be accessed through the Yahoo Finace website as well as programmatically using APIs and libraries such as ‘finance’ in Python.
+
+Load the libraries and download the dataset
+
+We will work with data from APPLE, Microsoft, Google, Amazon, Meta, Tesla, Netflix, NVIDIA, JP Morgan, and VISA. The period is from 1st January 2020 to 31st December 2023.
+
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.ensemble import RandomForestRegressor
+import networkx as nx
+from sklearn.manifold import MDS
+from sklearn.preprocessing import StandardScaler
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import squareform
+
+# List of stock tickers
+tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NFLX', 'NVDA', 'JPM', 'V']
+# Download data from Yahoo Finance
+data = yf.download(tickers, start="2020-01-01", end="2023-12-31", progress=False)['Adj Close']
+# Calculate daily returns
+returns = data.pct_change().dropna()
+We can change the timezone to a specific timezone.
+
+# Convert the time series to a specific timezone
+data.index = data.index.tz_convert('America/New_York')
+
+# Display the data with timezone conversion
+print(data.head())
+To simplify, sometimes we need to remove the time zone information from the dataset which we can accomplish easily.
+
+# Remove timezone information
+data.index = data.index.tz_localize(None)
+# Display the data without timezone information
+print(data.head(2))
+Let’s extract some information from the time column, e.g., Year, Month, Day, and Weekday and create new columns. We can also view cumulative returns for a specific stock, e.g., ‘AAPL’.
+
+# Extract year, month, day, and weekday as features
+data['Year'] = data.index.year
+data['Month'] = data.index.month
+data['Day'] = data.index.day
+data['Weekday'] = data.index.weekday
+
+
+# Calculate cumulative returns for AAPL stock
+data['AAPL_Cumulative_Return'] = (1 + data['AAPL'].pct_change()).cumprod()
+
+# Plot the cumulative returns
+data['AAPL_Cumulative_Return'].plot(title='AAPL Cumulative Returns')
+
+
+# Display the data with new date component features
+print(data.head())
+In real-life data, it is common to have missing values for various reasons. We need to handle those before proceeding to further analysis. There are multiple popular methods for missing value imputation in a time series. We are implementing ‘forward fill method’ in this article.
+
+‘Forward fill’ is a common and simple method for handling missing data by propagating the most recent non-missing value.
+
+There are other popular techniques such as backward fill, linear interpolation, time based interpolation, moving average imputation, seasonal decomposition imputation, spline interpolation , etc. Readers can explore other methods and compare the results.
+
+Missing value imputation with forward fill method
+
+# Check for missing values
+missing_data = data.isnull().sum()
+print("Missing data:\n", missing_data)
+
+# Fill missing values using forward fill
+data.fillna(method='ffill', inplace=True)
+Sometimes we may be interested to see the time series for a specific range of dates. the slicing method is useful for that purpose. Here is how we can do that.
+
+# Slice the data for a specific date range
+data_slice = data.loc['2022-01-01':'2022-12-31']
+
+# Display the sliced data
+print(data_slice.head())
+We can display the data for a specific date.
+
+# Indexing by a specific date
+specific_day_data = data.loc['2022-06-15']
+
+# Display the data for a specific date
+print(specific_day_data)
+Let’s visualize the dataset by plotting the ‘Adjusted close price’ column for each stock separately. It will provide us with some idea about the overall nature of the time series.
+
+The ‘Adjusted close price’ column represents the stock’s closing price after adjusting for corporate actions like dividends, stock splits, and new stock offerings.
+
+Adjusted close price time series
+
+plt.figure(figsize=(14, 7))
+for ticker in tickers:
+    plt.plot(data.index, data[ticker], label=ticker)
+plt.title('Adjusted Close Prices')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.savefig('adjustedClosePrice.png')
+plt.show()
+
+Image created by the author
+Daily returns represent the percentage change in a stock’s price from one trading day to the next. It is a key measure of the stock’s performance over a short period and is widely used to evaluate its volatility, profitability, and risk.
+
+To check the spread, skewness, and outliers of the daily returns, let’s look at the distribution's box plot and violin plot.
+
+Box plot of daily returns
+plt.figure(figsize=(14, 7))
+sns.boxplot(data=returns)
+plt.title('Boxplot of Daily Returns')
+plt.xlabel('Stock')
+plt.ylabel('Daily Return')
+plt.savefig('boxplotofdailyreturns.png')
+
+plt.show()
+
+Image created by the author
+Violin plot of stock returns
+plt.figure(figsize=(10, 7))
+sns.violinplot(data=returns[selected_stocks])
+plt.title('Violin Plot of Stock Returns')
+plt.xlabel('Stocks')
+plt.ylabel('Returns')
+plt.savefig('violinplot.png')
+
+plt.show()
+
+Image created by the author
+Lag plot to identify the autocorrelation
+A lag plot (also known as a scatter plot of lagged values) is a visual tool used in time series analysis to check for autocorrelation (correlation of a time series with a lagged version of itself) and other relationships between time points in the series. Specifically, a lag plot helps to determine if a time series is random or has underlying patterns or structure.
+
+In the context of financial time series data, a lag plot of stock returns helps in determining if past returns have any influence on future returns. This is especially useful for identifying trends, momentum, or mean-reverting behaviour. We will look at the lag plot of the specific stock ‘AAPL’ in the data set.
+
+from pandas.plotting import lag_plot
+
+# Lag plot for AAPL stock returns
+plt.figure(figsize=(7, 7))
+lag_plot(returns['AAPL'], lag=1)
+plt.title('Lag Plot of AAPL Returns')
+plt.savefig('lagplotAAPL.png')
+plt.show()
+
+Image created by the author
+Correlation
+The correlation of stock returns between different companies measures the degree to which the returns of two stocks move with each other over a specific period. The correlation coefficient ranges between -1 and 1 and provides insight into how the stocks behave together.
+
+If two stocks have a positive correlation, it implies their returns move in the same direction.
+
+For example, APPLE and Microsoft shows a correlation of 0.72 here for this specific period implying they exhibit positive correlation as they are influenced by similar industry trends, economic factors, and market conditions.
+
+A negative correlation means the returns of two stocks move in opposite directions. Low or negative correlation helps in portfolio diversification, whereas, a highly positive correlation may indicate market-wide trends.
+
+Understanding stock return correlations is essential for risk management, portfolio optimization, and trading strategies, especially in volatile markets.
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(returns.corr(), annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+plt.title('Correlation Matrix of Stock Returns')
+plt.savefig('correlationofreturn.png')
+
+plt.show()
+
+or example,
+Rolling correlation heatmap
+Rolling correlation is a technique used to analyze the relationship between two time series variables, such as stock returns in this case, over a moving window. This method helps to understand how the correlation between two stocks evolves, rather than assuming that the correlation is constant.
+
+This is a valuable tool for analyzing the dynamic relationship between stock returns.
+
+import seaborn as sns
+# Select a few stocks for visualization
+selected_stocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+
+# Calculate rolling correlations with a 60-day window
+rolling_corr = returns[selected_stocks].rolling(window=60).corr()
+
+# Unstack the rolling correlation DataFrame for easier plotting
+rolling_corr_unstacked = rolling_corr.unstack(level=1)
+
+# Plot heatmap of rolling correlations
+plt.figure(figsize=(14, 7))
+sns.heatmap(rolling_corr_unstacked.T, cmap='coolwarm', vmin=-1, vmax=1)
+plt.title('Rolling Correlations Heatmap (60-Day Window)')
+plt.savefig('rolling_correlation.png')
+
+plt.show()
+
+Image created by the author
+Pairplot of selected stocks
+Pairplot is essentially a grid of scatter plots for each pair of variables, along with histograms or density plots on the diagonal to show the distribution of individual variables. A pairplot helps visualize pairwise correlations, and individual distributions, and detect outliers. This makes it essential for tasks like portfolio analysis, feature selection, and understanding stock return behaviour.
+
+import seaborn as sns
+
+# Select a few stocks for visualization
+selected_stocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+
+# Create a DataFrame of selected stocks' returns
+returns_subset = returns[selected_stocks]
+
+# Create the pair plot
+sns.pairplot(returns_subset)
+plt.suptitle('Pair Plot of Stock Returns', y=1.02)
+plt.savefig('Pair Plot.png')
+
+plt.show()
+
+Image created by the author
+Rolling correlation
+We can also look into the rolling correlation for two specific stocks for a specific period to identify the dynamic relationship between them over a certain period.
+
+# Calculate 60-day rolling correlation between AAPL and MSFT
+rolling_corr = data['AAPL'].rolling(window=60).corr(data['MSFT'])
+
+# Plot the rolling correlation
+rolling_corr.plot(title='60-Day Rolling Correlation Between AAPL and MSFT')
+plt.savefig('AAPLMSFTRollingCorrelation.png')
+
+Image created by the author
+Hierarchical clustering
+Hierarchical clustering can be used to analyze stock returns to understand which stocks behave similarly and form natural clusters based on their performance. The height at which branches merge represents the level of similarity between stocks: lower merging points indicate stronger similarity, while higher merging points indicate weaker similarity.
+
+# Standardize the returns
+scaler = StandardScaler()
+returns_scaled = scaler.fit_transform(returns)
+
+# Compute the correlation matrix
+corr = np.corrcoef(returns_scaled.T)
+
+# Compute the distance matrix (1 - correlation)
+dist = 1 - corr
+
+# Ensure the distance matrix is symmetric
+dist = (dist + dist.T) / 2
+
+# Set the diagonal to zero
+np.fill_diagonal(dist, 0)
+
+# Convert the square distance matrix to a condensed distance matrix
+condensed_dist = squareform(dist)
+
+# Perform hierarchical clustering
+linkage_matrix = linkage(condensed_dist, method='ward')
+
+# Plot the dendrogram
+plt.figure(figsize=(10, 7))
+dendrogram(linkage_matrix, labels=tickers)
+plt.title("Hierarchical Clustering Dendrogram")
+plt.xlabel("Stock Ticker")
+plt.ylabel("Distance")
+plt.savefig("HiararchialClustering.png")
+
+plt.show()
+
+Image created by the author
+This clustering method allows you to see which stocks are more similar to each other and how these relationships evolve as you move up the hierarchy. By examining the structure of the dendrogram, investors and analysts can gain insights into portfolio diversification, stock similarities, market regimes, and potential trading strategies. It’s an intuitive way to understand the complex relationships within financial data, especially when dealing with multiple assets.
+
+Network plot with multidimensional scaling (MDS)
+A network plot based on stock correlation shows the relationships between stocks using a network structure, where stocks are nodes, and the edges (lines) between them represent correlations. We have implemented the MDS technique here. We can reduce the dimensionality of the correlation matrix and map the stocks onto a 2D or 3D plane for better visualization as below. To learn about the MDS technique you can check out this article.
+
+# Standardize the returns (optional, but generally recommended for MDS)
+scaler = StandardScaler()
+returns_scaled = scaler.fit_transform(returns)
+
+# Calculate the correlation matrix
+correlation_matrix = np.corrcoef(returns_scaled.T)
+
+# Convert the correlation matrix to a distance matrix
+dist_matrix = 1 - correlation_matrix
+
+# Apply MDS to reduce dimensionality to 2D
+mds = MDS(n_components=2, dissimilarity="precomputed", random_state=42)
+mds_result = mds.fit_transform(dist_matrix)
+
+# Create a DataFrame to hold MDS results
+mds_df = pd.DataFrame(mds_result, columns=['MDS1', 'MDS2'], index=tickers)
+
+# Create a network graph object
+G = nx.Graph()
+
+# Add nodes (stocks) with positions from MDS
+for stock in tickers:
+    G.add_node(stock, pos=(mds_df.loc[stock, 'MDS1'], mds_df.loc[stock, 'MDS2']))
+
+# Define a threshold for drawing edges (e.g., only strong correlations)
+threshold = 0.7
+
+# Add edges (connections) based on the correlation matrix
+for i, stock1 in enumerate(tickers):
+    for j, stock2 in enumerate(tickers):
+        if i < j:  # Only consider each pair once
+            corr_value = correlation_matrix[i, j]
+            if abs(corr_value) >= threshold:
+                # Add an edge with a weight corresponding to the correlation value
+                G.add_edge(stock1, stock2, weight=corr_value)
+
+# Get positions from MDS results
+pos = nx.get_node_attributes(G, 'pos')
+
+# Draw the network plot
+plt.figure(figsize=(10, 8))
+
+# Draw nodes
+nx.draw_networkx_nodes(G, pos, node_size=500, node_color='lightblue')
+
+# Draw edges
+edges = G.edges(data=True)
+nx.draw_networkx_edges(
+    G, pos, edgelist=[(u, v) for u, v, d in edges if d['weight'] > 0],
+    width=2, edge_color='green'
+)
+nx.draw_networkx_edges(
+    G, pos, edgelist=[(u, v) for u, v, d in edges if d['weight'] < 0],
+    width=2, edge_color='red'
+)
+
+# Draw labels
+nx.draw_networkx_labels(G, pos, font_size=12, font_family='sans-serif')
+
+# Show plot
+plt.title("Network Plot of Stock Correlations (with MDS)")
+plt.savefig('networkplotMDS.png')
+
+plt.show()
+
+Image created by the author
+This technique helps investors understand relationships between stocks, identify clusters of correlated stocks, and make informed decisions about diversification and risk management.
+
+Outlier
+Detecting and handling outliers is crucial for ensuring data quality, making accurate predictions, and drawing reliable conclusions. In this article, we have implemented the Interquartile Range (IQR) Method for the detection of outliers. For a detailed discussion on outlier detection in a time series, you can check out this medium article.
+
+# Identify outliers in returns using the IQR method for a specific stock (e.g., AAPL)
+Q1 = returns['AAPL'].quantile(0.25)
+Q3 = returns['AAPL'].quantile(0.75)
+IQR = Q3 - Q1
+outliers = returns[(returns['AAPL'] < (Q1 - 1.5 * IQR)) | (returns['AAPL'] > (Q3 + 1.5 * IQR))]
+
+# Plot the returns with outliers highlighted
+plt.figure(figsize=(14, 7))
+plt.plot(returns['AAPL'], label='AAPL Returns')
+plt.scatter(outliers.index, outliers['AAPL'], color='red', label='Outliers')
+plt.title('AAPL Daily Returns with Outliers')
+plt.xlabel('Date')
+plt.ylabel('Daily Return')
+plt.legend()
+plt.savefig('AAPL_outlier.png')
+
+plt.show()
+
+Image created by the author
+Moving average
+Moving average is a statistical technique used to reduce noise and better visualize trends in the data. It smooths out the short-term fluctuations and highlights long-term trends or cycles. here we have Calculated 50-day and 200-day moving averages for the stock price of APPLE and visualized them in a plot.
+
+# Calculate 50-day and 200-day moving averages for AAPL
+sma_50 = data['AAPL'].rolling(window=50).mean()
+sma_200 = data['AAPL'].rolling(window=200).mean()
+
+# Calculate Bollinger Bands
+rolling_mean = data['AAPL'].rolling(window=20).mean()
+rolling_std = data['AAPL'].rolling(window=20).std()
+upper_band = rolling_mean + (rolling_std * 2)
+lower_band = rolling_mean - (rolling_std * 2)
+
+plt.figure(figsize=(14, 7))
+plt.plot(data['AAPL'], label='AAPL Price')
+plt.plot(sma_50, label='50-Day SMA', color='orange')
+plt.plot(sma_200, label='200-Day SMA', color='green')
+plt.plot(upper_band, label='Upper Bollinger Band', color='red')
+plt.plot(lower_band, label='Lower Bollinger Band', color='blue')
+plt.fill_between(data.index, lower_band, upper_band, color='gray', alpha=0.3)
+plt.title('AAPL Price with Moving Averages and Bollinger Bands')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.savefig('AAPL_MAplot.png')
+
+plt.show()
+
+Decompose time series for APPLE and visualize
+
+# Decompose the time series for AAPL
+decomposition = seasonal_decompose(data['Adj Close']['AAPL'], model='multiplicative', period=365)
+
+# Plot the decomposed components
+plt.figure(figsize=(12, 8))
+plt.subplot(411)
+plt.plot(decomposition.observed, label='Observed')
+plt.legend(loc='best')
+plt.subplot(412)
+plt.plot(decomposition.trend, label='Trend')
+plt.legend(loc='best')
+plt.subplot(413)
+plt.plot(decomposition.seasonal, label='Seasonality')
+plt.legend(loc='best')
+plt.subplot(414)
+plt.plot(decomposition.resid, label='Residuals')
+plt.legend(loc='best')
+plt.tight_layout()
+plt.show()
+
+Image created by the author
+Daily return distribution
+This plot shows the daily distribution of APPLE stock for that period.
+
+plt.figure(figsize=(14, 7))
+sns.histplot(returns.AAPL, bins=50, kde=True)
+plt.title(f'{ticker} Daily Returns Distribution')
+plt.xlabel('Daily Return')
+plt.ylabel('Frequency')
+plt.savefig('AAPL_return.png')
+plt.show()
+
+Image created by the author
+Forecasting method
+We can implement many popular techniques for forecasting the stock price. Each technique has its strengths and limitations. Some of the techniques need specific data preprocessing and input format. We have chosen a few and shown forecasting of the APPLE stock prices.
+
+ARIMA (AutoRegressive Integrated Moving Average) model for forecasting
+It is a statistical model that combines autoregression, differencing, and moving averages to capture patterns in time series data. This is a popular model and effective especially for modeling and forecasting data with linear relationships.
+
+from statsmodels.tsa.arima.model import ARIMA
+
+# Fit ARIMA model
+model = ARIMA(data['AAPL'], order=(5, 1, 0))
+model_fit = model.fit()
+
+# Forecast the next 30 days
+forecast = model_fit.forecast(steps=30)
+
+# Plot the forecast
+plt.figure(figsize=(14, 7))
+plt.plot(data['AAPL'], label='Observed')
+plt.plot(forecast.index, forecast, label='Forecast', color='red')
+plt.title('AAPL Stock Price Forecasting with ARIMA')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.savefig('AAPL_ARIMA.png')
+
+plt.show()
+
+Image created by the author
+Calculate the error of the model
+
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+
+# Calculate the performance metrics
+mse = mean_squared_error(data['AAPL'].iloc[-30:], forecast)
+mae = mean_absolute_error(data['AAPL'].iloc[-30:], forecast)
+
+print(f'Mean Squared Error: {mse}')
+print(f'Mean Absolute Error: {mae}')
+Prophet for forecasting
+Another popular method for forecasting is ‘Prophet’ - an open-source forecasting tool developed by Facebook. It is designed for business time series data that exhibit strong seasonality and are influenced by holidays and other recurring events. This model automatically handles missing data and outliers and requires minimal data preprocessing.
+
+from prophet import Prophet
+
+# Prepare the data for Prophet
+# Prophet requires a DataFrame with two columns: ds (date) and y (value)
+
+df_prophet =(data['AAPL']).reset_index()
+#df_prophet = df_prophet.rename(columns={'Date': 'ds', 'AAPL': 'y'}, inplace = True)
+df_prophet_apple = df_prophet.rename(columns={'Date': 'ds', 'AAPL': 'y'})
+# Remove timezone information to make it naive
+df_prophet_apple['ds'] = df_prophet_apple['ds'].dt.tz_localize(None)
+# Initialize and fit the model
+model_prophet = Prophet()
+model_prophet.fit(df_prophet_apple)
+
+# Create a future dataframe for predictions
+future = model_prophet.make_future_dataframe(periods=365)  # Forecasting for 1 year into the future
+forecast = model_prophet.predict(future)
+
+# Plot the forecast
+model_prophet.plot(forecast)
+plt.title('Prophet Forecast for AAPL')
+
+plt.show()
+plt.savefig('AAPL_prophetforecast.png')
+# Plot components (trend, weekly, yearly seasonality)
+model_prophet.plot_components(forecast)
+plt.savefig('AAPL_prophet.png')
+
+plt.show()
+
+Image created by the author
+
+Random Forest Regressor
+Random forest regressor is an ensemble learning-based model. It builds multiple decision trees and combines the predictions to make better forecasting. Each tree is built using a subset of the data, and the final prediction is an average of the predictions from individual trees.
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error
+
+# Create lagged features for Random Forest
+data['Lag_1'] = data['AAPL'].shift(1)
+data['Lag_2'] = data['AAPL'].shift(2)
+data['Lag_3'] = data['AAPL'].shift(3)
+data.dropna(inplace=True)
+
+# Define features and target
+X = data[['Lag_1', 'Lag_2', 'Lag_3']]
+y = data['AAPL']
+
+# Split the data into training and testing sets
+train_size = int(len(X) * 0.8)
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# Initialize and train the model
+rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+rf_model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = rf_model.predict(X_test)
+
+# Calculate and print the mean squared error
+mse_rf = mean_squared_error(y_test, y_pred)
+print(f'Mean Squared Error (Random Forest): {mse_rf}')
+
+# Plot the actual vs predicted values
+plt.figure(figsize=(14, 7))
+plt.plot(y_test.index, y_test, label='Actual')
+plt.plot(y_test.index, y_pred, label='Predicted', color='red')
+plt.title('Random Forest Forecasting for AAPL')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.savefig('AAPL_RFRegressor.png')
+
+plt.show()
+
+The image created by the author
+Support Vector Regressor
+Support vector regressor is more effective in capturing complex, non-linear relationships in datasets. It uses support vectors to find an optimal margin that minimizes error in forecasting. The challenges are its high computational cost and tuning the hyperparameters.
+
+from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error
+import numpy as np
+
+# Create lagged features
+data['Lag_1'] = data['AAPL'].shift(1)
+data['Lag_2'] = data['AAPL'].shift(2)
+data['Lag_3'] = data['AAPL'].shift(3)
+data.dropna(inplace=True)
+
+# Define features and target
+X = data[['Lag_1', 'Lag_2', 'Lag_3']]
+y = data['AAPL']
+
+# Split the data into training and testing sets
+train_size = int(len(X) * 0.8)
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# Initialize and train the model
+svr_model = SVR(kernel='rbf', C=100, gamma=0.1)
+svr_model.fit(X_train, y_train)
+
+# Make predictions
+y_pred_svr = svr_model.predict(X_test)
+
+# Calculate and print the mean squared error
+mse_svr = mean_squared_error(y_test, y_pred_svr)
+print(f'Mean Squared Error (SVR): {mse_svr}')
+
+# Plot the actual vs predicted values
+plt.figure(figsize=(14, 7))
+plt.plot(y_test.index, y_test, label='Actual')
+plt.plot(y_test.index, y_pred_svr, label='Predicted', color='red')
+plt.title('SVR Forecasting for AAPL')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.savefig('AAPL_SVR.png')
+
+plt.show()
+
+Image created by the author
+LSTM (Long Short-Term Memory)
+LSTM is a Recurrent Neural Network (RNN). It is effective in capturing long-term dependencies in sequential data. LSTM retains information over time through its memory cells, in many cases, making it a better choice for forecasting tasks involving complex, long-term patterns.
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM
+from sklearn.preprocessing import MinMaxScaler
+
+# Scale the data
+scaler = MinMaxScaler(feature_range=(0, 1))
+data_scaled = scaler.fit_transform(data['AAPL'].values.reshape(-1, 1))
+
+# Create the dataset with a specific lookback period
+lookback = 60
+X_lstm, y_lstm = [], []
+for i in range(lookback, len(data_scaled)):
+    X_lstm.append(data_scaled[i-lookback:i, 0])
+    y_lstm.append(data_scaled[i, 0])
+
+X_lstm, y_lstm = np.array(X_lstm), np.array(y_lstm)
+
+# Reshape X to be [samples, time steps, features] which is required for LSTM
+X_lstm = np.reshape(X_lstm, (X_lstm.shape[0], X_lstm.shape[1], 1))
+
+# Split into train and test sets
+train_size = int(len(X_lstm) * 0.8)
+X_train, X_test = X_lstm[:train_size], X_lstm[train_size:]
+y_train, y_test = y_lstm[:train_size], y_lstm[train_size:]
+
+# Build the LSTM model
+model_lstm = Sequential()
+model_lstm.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+model_lstm.add(LSTM(units=50))
+model_lstm.add(Dense(1))
+
+# Compile the model
+model_lstm.compile(loss='mean_squared_error', optimizer='adam')
+
+# Train the model
+model_lstm.fit(X_train, y_train, epochs=10, batch_size=64, verbose=2)
+
+# Predict on the test set
+y_pred_lstm = model_lstm.predict(X_test)
+y_pred_lstm = scaler.inverse_transform(y_pred_lstm)
+
+# Plot the actual vs predicted values
+plt.figure(figsize=(14, 7))
+plt.plot(data.index[-len(y_test):], scaler.inverse_transform(y_test.reshape(-1, 1)), label='Actual')
+plt.plot(data.index[-len(y_test):], y_pred_lstm, label='Predicted', color='red')
+plt.title('LSTM Forecasting for AAPL')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.savefig('AAPL_LSTM.png')
+
+plt.show()
+
+Image created by the author
+These are some of the methods to perform forecasting of the Yahoo finance dataset. We can compare the individual model’s performance. In this article, I have emphasized the exploratory data analysis section as it is one of the crucial steps to build up any prediction/forecasting model. We have explored a variety of techniques to describe, extract, and visualize the dataset. Understanding the trend of individual stock returns or the relationship among multiple stocks is also crucial as it helps you to understand the overall market condition.
+
+Happy reading!
+
+Relevant Articles and References
+
+Interpolation in Time Series
+Time series Forecasting in Python
+Yahoo Finance
+An amazing method to plot stock market data in Python
+About me:
+Thank you for reading the article! If you find this article useful, check out my other articles relevant to data science. Also, like, clap, comment, and follow me on Medium, LinkedIn, and GitHub.

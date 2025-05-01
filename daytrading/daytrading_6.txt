@@ -1,0 +1,665 @@
+Combining ARIMA, LSTM and Fourier Models with Technical Indicators for JPM Price Prediction and Backtesting
+Alexzap
+Alexzap
+
+·
+Follow
+
+13 min read
+·
+Apr 28, 2024
+331
+
+
+6
+
+
+
+
+
+Four Pillars of Financial Risk: Market Risk, Credit Risk, Liquidity Risk, and Operational Risk
+Four Pillars of Financial Risk: Market Risk, Credit Risk, Liquidity Risk, and Operational Risk
+The objective of this post is to combine autoregressive, Fourier and deep learning models with Technical Indicators (TI) for robust stock price prediction and backtesting, focusing specifically on JPM.
+Business Motivation: Banks have always been vulnerable to quickly shifting sentiment among investors, depositors, and regulators. In the year since authorities in the U.S. and Switzerland stepped in to quell contagion risk after the collapse of SVB, Signature, and Credit Suisse, regulators remain acutely aware of the sector’s sensitivities.
+Unlike other papers that concentrate on a one-size-fits-all technique, in this paper we follow a more holistic strategy that integrates predictive analytics and TI into a single decision-making framework aimed at detecting and predicting financial asset price breakouts and trends to make informed decisions.
+The key approach that influenced the present study under the umbrella of algo-trading (AT) is the integrated time-series forecasting analysis successfully demonstrated on the GS data.
+The ultimate business goal of AT is the systematic application of Financial Risk Management to stock (algorithmic) trading and investments. In fact, traders always strive to maximize ROI while minimizing the likelihood of losing money on investment decisions. This is where AT comes into play.
+Simply put, AT is when you use SaaS products to open and close trades according to set rules such as points of price movement in an underlying market. Once the current market conditions match any predetermined criteria, trading algorithms (algos) can execute a buy or sell order on your behalf.
+In principle, AT can generate profits at a speed and frequency that is impossible for a human trader. To earn profits at an unattainable frequency for a human trader, algorithms are used to automate trading.
+While TI-powered technical analysis is just one approach to risk-aware time-series analysis, it can complement other quantitative methods such as statistical/ML price forecasting and provide credible fintech BI insights into securities.
+Let’s dive into further details of this integrated model-based TI methodology.
+Basic Imports & Installations
+Conventionally, the Jupyter Notebook within Anaconda IDE will be used in the sequel.
+Setting the working directory YOURPATH and importing/installing Python libraries
+import os
+os.chdir('YOURPATH')    # Set working directory
+os. getcwd()
+
+!pip install pmdarima, yfinance, statsmodels, matplotlib, sklearn, keras,quantstats
+
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from pmdarima.arima import auto_arima
+from statsmodels.tsa.arima.model import ARIMA
+import matplotlib.pyplot as plt
+from pandas_datareader.data import DataReader
+from pandas_datareader import data as pdr
+from keras.models import Sequential
+from keras.layers import Dense, LSTM
+# For time stamps
+from datetime import datetime
+from datetime import datetime as dt, timedelta as td
+import quantstats as qs
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error,mean_absolute_error,explained_variance_score,r2_score
+Reading Input Stock Data
+Option 1: Use yf.download
+# Download data
+gs = yf.download("JPM", start="2022-01-03", end="2024-04-26")
+gs
+
+           Open        High      Low        Close      Adj Close  Volume
+Date      
+2022-01-03 159.860001 162.639999 159.509995 161.699997 150.404938 13120900
+2022-01-04 164.309998 168.580002 164.229996 167.830002 156.106750 20195800
+2022-01-05 167.820007 168.360001 163.729996 163.779999 153.252762 17539400
+2022-01-06 166.910004 167.369995 163.869995 165.520004 154.880951 14047500
+2022-01-07 165.669998 167.529999 165.059998 167.160004 156.415543 13913300
+... ... ... ... ... ... ...
+2024-04-22 185.990005 190.130005 185.979996 189.410004 189.410004 11529700
+2024-04-23 191.130005 192.229996 190.520004 192.139999 192.139999 9144400
+2024-04-24 190.529999 193.229996 190.169998 193.080002 193.080002 6964900
+2024-04-25 192.250000 193.940002 191.179993 193.369995 193.369995 9802300
+2024-04-26 193.570007 194.869995 193.059998 193.490005 193.490005 6408600
+582 rows × 6 columns
+Option 2: Use pdr.get_data_yahoo
+yf.pdr_override()
+df = pdr.get_data_yahoo('JPM', start='2022-01-01', end=datetime.now())
+Plotting Close price vs Volume
+df['Close'].plot()
+df['Volume'].plot()
+JPM Close Price
+JPM Close Price
+JPM Volume
+JPM Volume
+General Data Structure
+Examining the data shape, column info, and descriptive summary statistics
+gs.shape
+(582, 6)
+
+gs.info()
+<class 'pandas.core.frame.DataFrame'>
+DatetimeIndex: 582 entries, 2022-01-03 to 2024-04-26
+Data columns (total 6 columns):
+ #   Column     Non-Null Count  Dtype  
+---  ------     --------------  -----  
+ 0   Open       582 non-null    float64
+ 1   High       582 non-null    float64
+ 2   Low        582 non-null    float64
+ 3   Close      582 non-null    float64
+ 4   Adj Close  582 non-null    float64
+ 5   Volume     582 non-null    int64  
+dtypes: float64(5), int64(1)
+memory usage: 31.8 KB
+
+gs.describe().T
+JPM descriptive summary statistics
+JPM descriptive summary statistics
+Basic FinTech Statistics
+Calculating JPM daily and cumulative returns
+#Using pct_change()
+
+s=gs['Adj Close'].pct_change()
+s.plot()
+
+#Direct formula
+
+prices=gs['Adj Close']
+day_ret=prices / prices.shift(1) - 1
+day_ret.plot()
+JPM daily returns
+JPM daily returns
+#Cumulative return
+cum_ret = (1 + day_ret).cumprod() - 1 
+cum_ret.plot()
+JPM cumulative return
+JPM cumulative return
+Calculating yearly average return
+# Yearly returns for our stock
+ind_er = prices.resample('YE').last().pct_change().mean()
+ind_er
+0.2287324160878843
+Volatility is given by the annual std *sqrt(250).
+ann_sd = gs.pct_change().apply(lambda x: np.log(1+x)).std().apply(lambda x: x*np.sqrt(250))
+ann_sd['Adj Close']
+0.24699050446859086
+Calculating the 2Y JPM beta and Sharpe ratio
+def get_beta(stock):
+    start=dt.today() - td(days=365*2)
+    df = yf.download([stock, '^GSPC'],start=start)['Adj Close']
+    df_return = np.log(df / df.shift())
+    (df_return.mean() * 12).plot.bar(title="Annual Log Return")
+    cov = df_return.cov() * 12
+    market_cov = cov.iloc[0,1]
+    var_market = cov.iloc[1,1]
+    beta = market_cov / var_market
+    print(f'Beta 2Y of {stock.upper()} is : {beta}')
+    return beta
+
+get_beta('JPM')
+Beta 2Y of JPM is : 0.858294992324221
+JPM Annual Log Return vs ^GSPC benchmark
+JPM Annual Log Return vs ^GSPC benchmark
+def get_sharpe(stock):
+    start=dt.today()-td(365*2)
+    df = yf.download(stock,start=start)['Adj Close']
+    ret = df.pct_change()
+    ri = ret.mean()
+    rf = (.0467 / 365)  # 10 Year Treasury Rate of 4.67% for Apr 26 2024
+    sigma = ret.std()
+    sr = (ri - rf) * 250 ** .5 / sigma # annualize the sharpe ratio
+    print(f'Sharpe Ratio of {stock.upper()} is : {sr}')
+    return sr
+
+get_sharpe('JPM')
+Sharpe Ratio of JPM is : 1.13994216822035
+Comparing 2Y kurtosis, skewness and std: JPM vs ^GSPC benchmark
+start=dt.today()-td(365*2)
+stocks=['JPM','^GSPC']
+dfs = yf.download(stocks,start=start)['Adj Close']
+
+print('\n')
+print("JPM kurtosis: ", qs.stats.kurtosis(dfs.JPM).round(2))
+print('\n')
+print("JPM skewness: ", qs.stats.skew(dfs.JPM).round(2))
+print('\n')
+print("^GSPC kurtosis: ", qs.stats.kurtosis(dfs['^GSPC']).round(2))
+print('\n')
+print("^GSPC skewness: ", qs.stats.skew(dfs['^GSPC']).round(2))
+
+JPM kurtosis:  3.41
+
+
+JPM skewness:  0.22
+
+
+^GSPC kurtosis:  2.15
+
+
+^GSPC skewness:  -0.04
+
+# Calculating Standard Deviations
+print('\n')
+print("JPM std: ", (dfs.JPM.std()))
+print('\n')
+print("^GSPC std: ", (dfs['^GSPC'].std()))
+
+JPM std:  24.32097599599042
+
+
+^GSPC std:  413.1545617327915
+Data Pre-Processing
+Preparing our stock data for statistical modeling
+# Preprocess data
+dataset_ex_df = gs.copy()
+dataset_ex_df = dataset_ex_df.reset_index()
+dataset_ex_df['Date'] = pd.to_datetime(dataset_ex_df['Date'])
+dataset_ex_df.set_index('Date', inplace=True)
+dataset_ex_df = dataset_ex_df['Close'].to_frame()
+ARIMA Predictions
+Running Auto ARIMA to select optimal ARIMA parameters
+model = auto_arima(dataset_ex_df['Close'], seasonal=False, trace=True)
+print(model.summary())
+
+Performing stepwise search to minimize aic
+ ARIMA(2,1,2)(0,0,0)[0] intercept   : AIC=2543.566, Time=0.26 sec
+ ARIMA(0,1,0)(0,0,0)[0] intercept   : AIC=2540.123, Time=0.02 sec
+ ARIMA(1,1,0)(0,0,0)[0] intercept   : AIC=2539.631, Time=0.04 sec
+ ARIMA(0,1,1)(0,0,0)[0] intercept   : AIC=2539.797, Time=0.05 sec
+ ARIMA(0,1,0)(0,0,0)[0]             : AIC=2538.501, Time=0.01 sec
+ ARIMA(1,1,1)(0,0,0)[0] intercept   : AIC=2540.551, Time=0.11 sec
+
+Best model:  ARIMA(0,1,0)(0,0,0)[0]          
+Total fit time: 0.498 seconds
+                               SARIMAX Results                                
+==============================================================================
+Dep. Variable:                      y   No. Observations:                  582
+Model:               SARIMAX(0, 1, 0)   Log Likelihood               -1268.250
+Date:                Sun, 28 Apr 2024   AIC                           2538.501
+Time:                        10:51:53   BIC                           2542.866
+Sample:                             0   HQIC                          2540.202
+                                - 582                                         
+Covariance Type:                  opg                                         
+==============================================================================
+                 coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------
+sigma2         4.6083      0.159     28.903      0.000       4.296       4.921
+===================================================================================
+Ljung-Box (L1) (Q):                   2.47   Jarque-Bera (JB):               370.59
+Prob(Q):                              0.12   Prob(JB):                         0.00
+Heteroskedasticity (H):               0.50   Skew:                            -0.46
+Prob(H) (two-sided):                  0.00   Kurtosis:                         6.80
+===================================================================================
+
+Warnings:
+[1] Covariance matrix calculated using the outer product of gradients (complex-step).
+Running ARIMA model forecasting with 80:20 % train/test split
+# Define the ARIMA model
+def arima_forecast(history):
+    # Fit the model
+    model = ARIMA(history, order=(0,1,0))
+    model_fit = model.fit()
+    
+    # Make the prediction
+    output = model_fit.forecast()
+    yhat = output[0]
+    return yhat
+
+# Split data into train and test sets
+X = dataset_ex_df.values
+size = int(len(X) * 0.8)
+train, test = X[0:size], X[size:len(X)]
+
+# Walk-forward validation
+history = [x for x in train]
+predictions = list()
+for t in range(len(test)):
+    # Generate a prediction
+    yhat = arima_forecast(history)
+    predictions.append(yhat)
+    # Add the predicted value to the training set
+    obs = test[t]
+    history.append(obs)
+Plotting ARIMA Predictions vs Actual Values
+plt.figure(figsize=(12, 6), dpi=100)
+plt.plot(dataset_ex_df.iloc[size:,:].index, test, label='Real')
+plt.plot(dataset_ex_df.iloc[size:,:].index, predictions, color='red', label='Predicted')
+plt.title('JPM: ARIMA Predictions vs Actual Values')
+plt.xlabel('Date')
+plt.ylabel('Stock Price')
+plt.legend()
+plt.grid()
+plt.show()
+JPM: ARIMA Predictions vs Actual Values
+JPM: ARIMA Predictions vs Actual Values
+Fast Fourier Transform (FFT)
+By applying FFT to stock market data, we can decompose the data into its harmonic components and examine trends, cycles, and other patterns in the data that may not be apparent by simply looking at the time-domain stock prices.
+# Calculate the Fourier Transform
+data_FT = dataset_ex_df[['Close']]
+close_fft = np.fft.fft(np.asarray(data_FT['Close'].tolist()))
+fft_df = pd.DataFrame({'fft':close_fft})
+fft_df['absolute'] = fft_df['fft'].apply(lambda x: np.abs(x))
+fft_df['angle'] = fft_df['fft'].apply(lambda x: np.angle(x))
+
+# Plot the Fourier Transforms
+plt.figure(figsize=(14, 7), dpi=100)
+plt.plot(np.asarray(data_FT['Close'].tolist()),  label='Real')
+for num_ in [9, 12, 15]:
+    fft_list_m10= np.copy(close_fft); fft_list_m10[num_:-num_]=0
+    plt.plot(np.fft.ifft(fft_list_m10), label='Fourier transform with {} components'.format(num_))
+plt.xlabel('Days')
+plt.ylabel('USD')
+plt.title('JPM (close) stock prices & Fourier transforms')
+plt.legend()
+plt.grid()
+plt.show()
+JPM (close) stock prices & Fourier transforms with 9, 12, and 15 harmonics
+JPM (close) stock prices & Fourier transforms with 9, 12, and 15 harmonics
+Technical Indicators
+Calculating popular TI such as EMA, RSI, MACD, and OBV
+# Calculate EMA
+def ema(close, period=20):
+    return close.ewm(span=period, adjust=False).mean()
+
+# Calculate RSI
+def rsi(close, period=14):
+    delta = close.diff()
+    gain, loss = delta.copy(), delta.copy()
+    gain[gain < 0] = 0
+    loss[loss > 0] = 0
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = abs(loss.rolling(period).mean())
+    rs = avg_gain / avg_loss
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    return rsi
+
+# Calculate MACD
+def macd(close, fast_period=12, slow_period=26, signal_period=9):
+    fast_ema = close.ewm(span=fast_period, adjust=False).mean()
+    slow_ema = close.ewm(span=slow_period, adjust=False).mean()
+    macd_line = fast_ema - slow_ema
+    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line
+
+# Calculate OBV
+def obv(close, volume):
+    obv = np.where(close > close.shift(), volume, np.where(close < close.shift(), -volume, 0)).cumsum()
+    return obv
+Combining multiple attributes into a single DataFrame
+# Add technical indicators to dataset DF
+dataset_ex_df['ema_20'] = ema(gs["Close"], 20)
+dataset_ex_df['ema_50'] = ema(gs["Close"], 50)
+dataset_ex_df['ema_100'] = ema(gs["Close"], 100)
+
+dataset_ex_df['rsi'] = rsi(gs["Close"])
+dataset_ex_df['macd'] = macd(gs["Close"])
+dataset_ex_df['obv'] = obv(gs["Close"], gs["Volume"])
+
+# Create arima DF using predictions
+arima_df = pd.DataFrame(history, index=dataset_ex_df.index, columns=['ARIMA'])
+
+# Set Fourier Transforms DF
+fft_df.reset_index(inplace=True)
+fft_df['index'] = pd.to_datetime(dataset_ex_df.index)
+fft_df.set_index('index', inplace=True)
+fft_df_real = pd.DataFrame(np.real(fft_df['fft']), index=fft_df.index, columns=['Fourier_real'])
+fft_df_imag = pd.DataFrame(np.imag(fft_df['fft']), index=fft_df.index, columns=['Fourier_imag'])
+
+# Technical Indicators DF
+technical_indicators_df = dataset_ex_df[['ema_20', 'ema_50', 'ema_100', 'rsi', 'macd', 'obv', 'Close']]
+
+# Merge DF
+merged_df = pd.concat([arima_df, fft_df_real, fft_df_imag, technical_indicators_df], axis=1)
+merged_df = merged_df.dropna()
+merged_df
+
+           ARIMA      Fourier_real Fourier_imag ema_20 ema_50 ema_100         rsi         macd     obv           Close
+2022-01-24 144.949997 -201.566374 214.014613 157.447139 160.146856 160.978126 28.150284 -3.824514 -104562400 144.949997
+2022-01-25 146.529999 -279.279825 203.384463 156.407412 159.612862 160.692024 18.472478 -4.190184 -85646500 146.529999
+2022-01-26 147.919998 369.818533 542.709666 155.599087 159.154318 160.439113 24.518002 -4.318043 -64937400 147.919998
+2022-01-27 145.309998 25.682103 171.273007 154.619173 158.611403 160.139526 18.411999 -4.577215 -82474200 145.309998
+2022-01-28 146.610001 274.497712 -4.915080 153.856395 158.140760 159.871615 17.535550 -4.624403 -68357200 146.610001
+... ... ... ... ... ... ... ... ... ... ...
+2024-04-22 189.410004 -5.929234 -70.674754 189.390177 186.925151 178.821004 36.090679 -1.675433 -11980700 189.410004
+2024-04-23 192.139999 49.465689 -2181.838777 189.652065 187.129655 179.084746 41.477586 -1.211977 -2836300 192.139999
+2024-04-24 193.080002 1364.315535 -837.780091 189.978535 187.363002 179.361880 46.267802 -0.760073 4128600 193.080002
+2024-04-25 193.369995 3658.073549 -2112.949053 190.301532 187.598570 179.639268 43.803156 -0.374222 13930900 193.369995
+2024-04-26 193.490005 4254.113653 -5441.158244 190.605196 187.829607 179.913540 42.205578 -0.058078 20339500 193.490005
+568 rows × 10 columns
+Plotting JPM OBV
+plt.figure(figsize=(12,6))
+plt.title('JPM OBV')
+plt.plot(merged_df['obv'])
+plt.xlabel('Date', fontsize=18)
+plt.ylabel('OBV', fontsize=18)
+plt.grid(color = 'black', linestyle = '--', linewidth = 1)
+plt.show()
+JPM OBV
+JPM OBV
+Plotting JPM EMA
+plt.figure(figsize=(16,6))
+plt.title('Close Price History')
+plt.plot(df['Close'])
+plt.plot(merged_df['ema_20'])
+plt.plot(merged_df['ema_50'])
+plt.plot(merged_df['ema_100'])
+plt.legend(['Close', 'ema_20','ema_50','ema_100'], loc='upper left')
+plt.xlabel('Date', fontsize=18)
+plt.ylabel('Close Price USD ($)', fontsize=18)
+plt.show()
+JPM EMA vs Close Price
+JPM EMA vs Close Price
+Plotting RSI
+plt.figure(figsize=(16,6))
+plt.title('RSI')
+plt.plot(merged_df['rsi'])
+plt.xlabel('Date', fontsize=18)
+plt.ylabel('RSI', fontsize=18)
+plt.axhline(30, linestyle = '--', linewidth = 1.5, color = 'black')
+plt.axhline(70, linestyle = '--', linewidth = 1.5, color = 'black')
+plt.show()
+JPM RSI
+JPM RSI
+Calculating and plotting MACD
+def get_macd(price, slow, fast, smooth):
+    exp1 = price.ewm(span = fast, adjust = False).mean()
+    exp2 = price.ewm(span = slow, adjust = False).mean()
+    macd = pd.DataFrame(exp1 - exp2).rename(columns = {'Close':'macd'})
+    signal = pd.DataFrame(macd.ewm(span = smooth, adjust = False).mean()).rename(columns = {'macd':'signal'})
+    hist = pd.DataFrame(macd['macd'] - signal['signal']).rename(columns = {0:'hist'})
+    frames =  [macd, signal, hist]
+    df = pd.concat(frames, join = 'inner', axis = 1)
+    return df
+
+googl_macd = get_macd(df['Close'], 26, 12, 9)
+googl_macd.tail()
+
+             macd      signal    hist
+Date   
+2024-04-22 -1.675433 -0.250636 -1.424797
+2024-04-23 -1.211977 -0.442904 -0.769073
+2024-04-24 -0.760073 -0.506338 -0.253735
+2024-04-25 -0.374222 -0.479915 0.105693
+2024-04-26 -0.058078 -0.395547 0.337469
+
+def plot_macd(prices, macd, signal, hist):
+    plt.figure(figsize=(16,6))
+    plt.plot(macd, color = 'black', linewidth = 1.5, label = 'MACD')
+    plt.plot(signal, color = 'blue', linewidth = 1.5, label = 'SIGNAL')
+
+    for i in range(len(prices)):
+        if str(hist[i])[0] == '-':
+            plt.bar(prices.index[i], hist[i], color = '#ef5350')
+        else:
+            plt.bar(prices.index[i], hist[i], color = '#26a69a')
+
+    plt.legend(loc = 'upper left')
+
+plot_macd(df['Close'], googl_macd['macd'], googl_macd['signal'], googl_macd['hist'])
+JPM MACD
+JPM MACD
+LSTM Predictions
+Preparing the train dataset
+# Create a new dataframe with only the 'Close column 
+data = df.filter(['Close'])
+# Convert the dataframe to a numpy array
+dataset = data.values
+# Get the number of rows to train the model on
+training_data_len = int(np.ceil( len(dataset) * .95 ))
+
+training_data_len
+553
+
+
+# Scale the data
+
+scaler = MinMaxScaler(feature_range=(0,1))
+scaled_data = scaler.fit_transform(dataset)
+
+# Create the scaled training data set
+train_data = scaled_data[0:int(training_data_len), :]
+# Split the data into x_train and y_train data sets
+x_train = []
+y_train = []
+
+for i in range(60, len(train_data)):
+    x_train.append(train_data[i-60:i, 0])
+    y_train.append(train_data[i, 0])
+    if i<= 61:
+        print(x_train)
+        print(y_train)
+        print()
+        
+# Convert the x_train and y_train to numpy arrays 
+x_train, y_train = np.array(x_train), np.array(y_train)
+
+# Reshape the data
+x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+Building, compiling and running the LSTM model
+from keras.models import Sequential
+from keras.layers import Dense, LSTM
+
+# Build the LSTM model
+model = Sequential()
+model.add(LSTM(128, return_sequences=True, input_shape= (x_train.shape[1], 1)))
+model.add(LSTM(64, return_sequences=False))
+model.add(Dense(25))
+model.add(Dense(1))
+
+# Compile the model
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train the model
+history=model.fit(x_train, y_train, batch_size=1, epochs=32)
+
+493/493 ━━━━━━━━━━━━━━━━━━━━ 8s 12ms/step - loss: 0.0067
+Epoch 2/32
+..................
+Epoch 30/32
+493/493 ━━━━━━━━━━━━━━━━━━━━ 7s 15ms/step - loss: 5.1676e-04
+Plotting the train loss function
+print(history.history.keys())
+dict_keys(['loss'])
+
+plt.plot(history.history['loss'], label='train')
+plt.ylabel('Loss')
+plt.xlabel('Epochs')
+plt.legend()
+plt.show()
+The train loss function
+The train loss function
+Creating and predicting the test dataset
+# Create a new array containing scaled values from index 1543 to 2002 
+test_data = scaled_data[training_data_len - 60: , :]
+# Create the data sets x_test and y_test
+x_test = []
+y_test = dataset[training_data_len:, :]
+for i in range(60, len(test_data)):
+    x_test.append(test_data[i-60:i, 0])
+    
+# Convert the data to a numpy array
+x_test = np.array(x_test)
+
+# Reshape the data
+x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1 ))
+
+# Get the models predicted price values 
+predictions = model.predict(x_test)
+predictions = scaler.inverse_transform(predictions)
+
+# Get the root mean squared error (RMSE)
+rmse = np.sqrt(np.mean(((predictions - y_test) ** 2)))
+rmse
+4.21706997838837
+Printing the LSTM model summary
+print(model.summary())
+Model: "sequential"
+The LSTM model summary
+The LSTM model summary
+Calculating test prediction errors
+# Calculate test metrics
+y_pred=predictions
+mse = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+mae = mean_absolute_error(y_test, y_pred)
+
+r2 = r2_score(y_test, y_pred)
+evs = explained_variance_score(y_test, y_pred)
+
+mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
+mpe = np.mean((y_test - y_pred) / y_test) * 100
+
+print(f"Mean Squared Error (MSE): {mse}")
+print(f"Mean Absolute Error (MAE): {mae}")
+print(f"R2 Score: {r2}")
+print(f"Explained Variance Score: {evs}")
+print(f"Mean Absolute Percentage Error (MAPE): {mape}")
+print(f"Mean Percentage Error (MPE): {mpe}")
+
+Mean Squared Error (MSE): 17.7836792026245
+Mean Absolute Error (MAE): 3.0730753931505927
+R2 Score: 0.5215499654615301
+Explained Variance Score: 0.7305213207439172
+Mean Absolute Percentage Error (MAPE): 1.6088634698761821
+Mean Percentage Error (MPE): -1.4585582001003663
+Plotting train, QC validation and prediction data
+train = data[:training_data_len]
+valid = data[training_data_len:]
+valid['Predictions'] = predictions
+# Visualize the data
+plt.figure(figsize=(16,6))
+plt.title('Model')
+plt.xlabel('Date', fontsize=18)
+plt.ylabel('Close Price USD ($)', fontsize=18)
+plt.plot(train['Close'])
+plt.plot(valid[['Close', 'Predictions']])
+plt.legend(['Train', 'Val', 'Predictions'], loc='lower right')
+plt.show()
+Train, QC validation and prediction JPM prices
+Train, QC validation and prediction JPM prices
+Compare the JPM Close prices vs LSTM predictions
+Close Predictions
+Date  
+2024-03-18 192.660004 192.881012
+2024-03-19 193.789993 195.245346
+2024-03-20 196.330002 196.504440
+2024-03-21 199.059998 198.940140
+2024-03-22 196.619995 201.644058
+2024-03-25 194.820007 199.739578
+2024-03-26 195.729996 197.932327
+2024-03-27 199.520004 198.583878
+2024-03-28 200.300003 202.093048
+2024-04-01 198.940002 203.160736
+2024-04-02 198.860001 202.085403
+2024-04-03 198.300003 201.901688
+2024-04-04 195.649994 201.389999
+2024-04-05 197.449997 198.966614
+2024-04-08 198.479996 200.337509
+2024-04-09 197.149994 201.409622
+2024-04-10 195.470001 200.340347
+2024-04-11 195.429993 198.706619
+2024-04-12 182.789993 198.493698
+2024-04-15 182.889999 186.827911
+2024-04-16 180.800003 185.706894
+2024-04-17 180.080002 183.751984
+2024-04-18 181.250000 182.930695
+2024-04-19 185.800003 183.966385
+2024-04-22 189.410004 188.328949
+2024-04-23 192.139999 191.962463
+2024-04-24 193.080002 194.719376
+2024-04-25 193.369995 195.785950
+2024-04-26 193.490005 196.146118
+Evaluation of Third-Party TI SaaS
+Macroaxis Wealth Optimization
+Invest in AI via Macroaxis
+Track All Markets with TradingView
+Conclusions
+We have addressed a very challenging task of predicting trends in JPM prices and calculating future value of this asset.
+We believe that the well known challenges of highly volatile and dynamic financial markets can be reduced by incorporating model-based time-series forecasting methods, fintech data analytics and TI-powered stock screening into a single Python-based algo-trading (AT) platform.
+This paper proposes trading strategies based on quantitative analysis of time series data using ARIMA, FFT, LSTM, and popular TI such as EMA, RSI, MACD, and OBV.
+We have also calculated and compared against the S&P 500 benchmark the JPM risk-adjusted returns, beta, annual volatility and std aimed at maximizing the (ROI/Risk) ratio.
+The Road Ahead: we will continue looking at the key trends, case examples and best industry practices that set to accelerate the AT market growth in the near future. Factors such as the increasing adoption of ML/AI, real-time data analytics, interactive visualizations, and the rising demand for automated trading systems do substantiate the current rapid AT industry growth in 3 key regions such as North America, Europe, and Asia.
+Explore More
+Post-SVB Risk Aware Investing
+JPM Breakouts: Auto ARIMA, FFT, LSTM & Stock Indicators
+Data Visualization in Python — 1. Stock Technical Indicators
+Applying a Risk-Aware Portfolio Rebalancing Strategy to ETF, Energy, Pharma, and Aerospace/Defense Stocks in 2023
+Towards Max(ROI/Risk) Trading
+LSTM Price Predictions of 4 Tech Stocks
+Donchian Channel Trading Systems
+Leveraging Predictive Uncertainties of Time Series Forecasting Models
+A Market-Neutral Strategy
+A Comprehensive Analysis of Best Trading Technical Indicators w/ TA-Lib — Tesla ‘23
+Plotly Dash TA Stock Market App
+IQR-Based Log Price Volatility Ranking of Top 19 Blue Chips
+Blue-Chip Stock Portfolios for Quant Traders
+Keras LSTM Stock Prediction
+Short-Term Stock Market Price Prediction using Deep Learning Models
+SARIMAX Crude Oil Prices Forecast — 1. WTI
+Risk-Aware Strategies for DCA Investors
+Datapane Stock Screener App from Scratch
+EUR/USD Forecast: Prophet vs JPM
+References
+Predicting Stock Prices: using ARIMA, Fourier Transformation and Deep Learning
+Display Deep Learning Model Training History in Keras
+A Quick Deep Learning Recipe: Time Series Forecasting with Keras in Python
+Forecasting Stock Prices Using ARIMA Model
+Time-Series Forecasting: Predicting Stock Prices Using An ARIMA Model
+Fourier Transform Can Predict Stock Prices : An Introduction to Time Series Analysis
+Technical indicators: The tools of the trade
+Data Science for Financial Markets
+Stock Market Analysis + Prediction using LSTM
+Nikhil-Adithyan/Algorithmic-Trading-with-Python
+Practical algorithmic trading — (1) Why algo trading and technical indicators?

@@ -1,0 +1,15 @@
+"Extended Daytrading with Python: Advanced Tools, Patterns, and Forecasting Techniques"
+
+It'll include in-depth discussions and code on:
+
+Monte Carlo simulation using historical & implied volatility
+
+Stationarity transformations (ADF tests, % change, log diff, etc.)
+
+Macroeconomic regime classification with ML & PCA
+
+Advanced use of vectorbt for portfolio optimization
+
+Candlestick pattern automation & visualization (61 types via TA-Lib)
+
+Real-world performance analysis + parameter tuning

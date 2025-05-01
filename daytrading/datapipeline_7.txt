@@ -1,0 +1,57 @@
+Building the Ultimate Trading Data Pipeline — Bonus: Automate the computation of max and min historical values
+Xavier Escudero
+Quant Factory
+Xavier Escudero
+
+·
+Follow
+
+Published in
+Quant Factory
+
+·
+3 min read
+·
+Jan 10, 2024
+3
+
+
+
+
+
+
+
+Trading strategies often rely on analyzing historical price data to identify patterns, trends, and key levels, including minimum or maximum historical values.
+
+For example, historical minimum values indicate support, and maximum values signify resistance levels for traders.
+
+The generation and storage of our finantial data in a database or other formats, such as Parquet files, depend on various factors including the nature of the data, the intended use cases, frequency of access, and specific requirements. Different formats and storage methods offer distinct advantages, and choosing the right one is crucial for efficient data management.
+
+Given the scale of our datasets and the desire to circumvent the generation of various indicators for the entire historical dataset, we can leverage the need into two database views: one dedicated to minimum historical values and another to maximum historical values:
+
+CREATE VIEW min_historical_view
+AS
+SELECT
+  date,
+  symbol,
+  close,
+  MIN(close) OVER (PARTITION BY symbol ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS min_historical_close
+FROM
+  daily_bars;
+
+
+CREATE VIEW max_historical_view
+AS
+SELECT
+  date,
+  symbol,
+  close,
+  MAX(close) OVER (PARTITION BY symbol ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS max_historical_close
+FROM
+  daily_bars;
+Remember that a table view is a virtual table in a database that is automatically calculated based on the data present in other tables.
+
+We can now run queries to observe, for instance, the maximum closing value up to the date of each respective row.
+
+
+The article, it’s concise and straightforward, but provides a glimpse into the considerations surrounding the selection of techniques for persisting data intended for future analysis. We’ll see how in an upcoming series of articles.

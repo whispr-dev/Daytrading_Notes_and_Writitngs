@@ -1,0 +1,280 @@
+Hybrid Transformer Decoder with Kolmogorov-Arnold Network (KAN) Activation for Time Series Forecasting
+shashank Jain
+AI Mind
+shashank Jain
+
+·
+Follow
+
+Published in
+AI Mind
+
+·
+7 min read
+·
+Sep 3, 2024
+64
+
+
+4
+
+
+
+
+
+What are KANs?
+
+Kolmogorov-Arnold Networks (KANs) are a class of neural networks inspired by the Kolmogorov-Arnold representation theorem, a fundamental result in functional analysis. This theorem, proved by Andrey Kolmogorov in 1957, states that any continuous multivariate function can be represented as a superposition of continuous univariate functions and addition operations.
+
+In mathematical terms, the theorem states that for any continuous function f: [0,1]^n → R, there exist continuous functions g_i and φ_ij such that:
+
+f(x_1, …, x_n) = sum_{i=1}^{2n+1} g_i(sum_{j=1}^n φ_ij(x_j))
+
+KANs attempt to leverage this theorem by constructing neural networks that mimic this structure. In a typical KAN:
+
+1. The input variables are first transformed by a set of univariate functions (φ_ij in the theorem).
+2. These transformed inputs are then summed.
+3. The sums are passed through another set of univariate functions (g_i in the theorem).
+4. The results are combined to produce the final output.
+
+The key idea is that by carefully choosing or learning these univariate functions, KANs can theoretically approximate any continuous multivariate function with high accuracy.
+
+What are we proposing as a hybrid of decoder with KAN?
+
+In our proposed model, we’re combining the powerful sequence modeling capabilities of Transformer Decoders with the universal function approximation properties of KANs. Specifically, we’re replacing the standard feed-forward neural network in the Transformer Decoder layers with a KAN-inspired activation function.
+
+This hybrid approach aims to leverage the strengths of both architectures:
+
+1. Transformer Decoders excel at capturing long-range dependencies in sequential data, which is crucial for time series forecasting.
+2. KAN-inspired activations potentially allow for more complex, non-linear transformations within each layer, which could enhance the model’s ability to capture intricate patterns in the data.
+
+Our hypothesis is that this combination will result in a model that can effectively model both the temporal dynamics (thanks to the Transformer architecture) and complex non-linear relationships (thanks to the KAN-inspired activations) present in time series data.
+
+Architecture
+
+Our hybrid architecture, which we’ll call TransformerDecoderKAN, consists of the following key components:
+
+1. Input Embedding: A linear layer that projects the input features into the model’s dimensional space.
+
+2. Positional Encoding: Added to the input embeddings to provide information about the sequence order.
+
+3. Transformer Decoder Layers: Modified to incorporate KAN-inspired activations. Each layer includes:
+— Self-Attention mechanism
+— Multi-head Attention mechanism (for encoder-decoder attention, if applicable)
+— Feed-forward network with KAN activation
+
+4. KAN Activation: A custom activation function inspired by the Kolmogorov-Arnold representation theorem. It’s defined as:
+
+KAN(x) = sum_{i=1}^m sin(w_i * x + b_i)
+
+Where m is the number of component functions, and w_i and b_i are learnable parameters.
+
+5. Output Layer: A linear layer that projects the final hidden state to the output dimension.
+
+Here’s a more detailed look at the KAN activation function:
+
+class KANActivation(nn.Module):
+def __init__(self, input_dim, num_functions=5):
+super(KANActivation, self).__init__()
+self.num_functions = num_functions
+self.weights = nn.Parameter(torch.randn(input_dim, num_functions))
+self.biases = nn.Parameter(torch.randn(input_dim, num_functions))
+
+def forward(self, x):
+expanded_x = x.unsqueeze(-1).expand(-1, -1, -1, self.num_functions)
+activations = torch.sin(expanded_x * self.weights + self.biases)
+return torch.sum(activations, dim=-1)
+
+This activation function applies a sum of sine functions to the input, with learnable weights and biases. The number of component functions (num_functions) is a hyperparameter that can be tuned.
+
+Training Workflow
+
+The training process for our TransformerDecoderKAN model follows these steps:
+
+1. Data Preparation:
+— Load historical time series data (in our case, stock prices).
+— Perform time series decomposition to separate trend and residual components.
+— Normalize the data using StandardScaler.
+— Create sliding windows of input sequences and corresponding target values.
+
+2. Model Initialization:
+— Initialize the TransformerDecoderKAN model with specified hyperparameters (input dimension, model dimension, number of heads, number of layers, etc.).
+— Initialize the optimizer (Adam) and learning rate scheduler.
+
+3. Training Loop:
+— For each epoch:
+a. Set the model to training mode.
+b. For each batch in the training data:
+— Forward pass: Compute model predictions.
+— Compute loss (Mean Squared Error between predictions and actual values).
+— Backward pass: Compute gradients.
+— Update model parameters.
+c. Evaluate on validation set.
+d. Update learning rate based on validation performance.
+e. Save the best model based on validation loss.
+f. Check for early stopping condition.
+
+4. Post-training:
+— Load the best model saved during training.
+— Evaluate on test set.
+— Compute and report performance metrics.
+
+Inference Flow
+
+During inference, the model processes input sequences to generate predictions:
+
+1. Data Preparation:
+— Preprocess the input data similarly to the training phase (normalization, windowing).
+
+2. Model Evaluation:
+— Set the model to evaluation mode.
+— For each input sequence:
+a. Pass the sequence through the input embedding layer.
+b. Add positional encoding.
+c. Process through Transformer Decoder layers with KAN activations.
+d. Generate prediction using the output layer.
+
+3. Post-processing:
+— Inverse transform the predictions to the original scale.
+— (Optional) Combine with other components if using decomposition.
+
+Code Explanation
+
+Let’s break down some key parts of our implementation:
+
+1. Time Series Decomposition and Data Preparation:
+
+decomposition = seasonal_decompose(prices, model=’multiplicative’, period=30)
+trend = decomposition.trend.dropna()
+residual = decomposition.resid.dropna()
+
+This code decomposes the price data into trend and residual components, which can help the model focus on different aspects of the time series.
+
+2. Custom Dataset:
+
+class TimeSeriesDataset(Dataset):
+def __init__(self, trend, residual, window_size):
+self.trend = trend
+self.residual = residual
+self.window_size = window_size
+
+def __getitem__(self, idx):
+trend_seq = self.trend[idx: idx + self.window_size]
+residual_seq = self.residual[idx: idx + self.window_size]
+x = np.stack((trend_seq, residual_seq), axis=1)
+y = self.trend[idx + self.window_size]
+return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
+
+This custom dataset class creates sliding windows of input sequences, combining trend and residual components.
+
+3. KAN Activation:
+
+class KANActivation(nn.Module):
+def __init__(self, input_dim, num_functions=5):
+super(KANActivation, self).__init__()
+self.num_functions = num_functions
+self.weights = nn.Parameter(torch.randn(input_dim, num_functions))
+self.biases = nn.Parameter(torch.randn(input_dim, num_functions))
+
+def forward(self, x):
+expanded_x = x.unsqueeze(-1).expand(-1, -1, -1, self.num_functions)
+activations = torch.sin(expanded_x * self.weights + self.biases)
+return torch.sum(activations, dim=-1)
+
+This implements the KAN-inspired activation function, using a sum of sine functions with learnable parameters.
+
+4. Modified Transformer Decoder Layer:
+
+class KANTransformerDecoderLayer(nn.Module):
+def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1):
+super(KANTransformerDecoderLayer, self).__init__()
+# … (attention mechanisms and other components)
+self.kan_activation = KANActivation(dim_feedforward)
+
+def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
+# … (attention computations)
+tgt2 = self.linear2(self.kan_activation(self.linear1(tgt)))
+# … (rest of the forward pass)
+
+This modified Transformer Decoder layer replaces the standard ReLU activation with our KAN-inspired activation in the feed-forward network part.
+
+5. Training Loop:
+
+for epoch in range(n_epochs):
+model.train()
+train_loss = 0
+for x, y in train_loader:
+optimizer.zero_grad()
+y_pred = model(x)
+loss = criterion(y_pred, y)
+loss.backward()
+optimizer.step()
+train_loss += loss.item()
+
+# Validation and early stopping logic
+
+This training loop implements the standard process of forward pass, loss computation, backpropagation, and parameter updates, along with validation and early stopping checks.
+
+Results
+
+Reliance
+
+Train Set Metrics:
+Mean Squared Error: 74.78
+Root Mean Squared Error: 8.65
+Mean Absolute Error: 7.25
+Mean Absolute Percentage Error: 0.31%
+
+Test Set Metrics:
+Mean Squared Error: 60.69
+Root Mean Squared Error: 7.79
+Mean Absolute Error: 6.01
+Mean Absolute Percentage Error: 0.26%
+
+
+GRSE
+
+Train Set Metrics:
+Mean Squared Error: 81.81
+Root Mean Squared Error: 9.04
+Mean Absolute Error: 7.02
+Mean Absolute Percentage Error: 2.62%
+
+Test Set Metrics:
+Mean Squared Error: 16.27
+Root Mean Squared Error: 4.03
+Mean Absolute Error: 3.58
+Mean Absolute Percentage Error: 0.77%
+
+
+TCS
+
+Train Set Metrics:
+Mean Squared Error: 5518.97
+Root Mean Squared Error: 74.29
+Mean Absolute Error: 57.78
+Mean Absolute Percentage Error: 1.71%
+
+Test Set Metrics:
+Mean Squared Error: 4473.09
+Root Mean Squared Error: 66.88
+Mean Absolute Error: 60.10
+Mean Absolute Percentage Error: 1.85%
+
+
+ICICI
+Train Set Metrics:
+Mean Squared Error: 620.47
+Root Mean Squared Error: 24.91
+Mean Absolute Error: 20.74
+Mean Absolute Percentage Error: 2.80%
+
+Test Set Metrics:
+Mean Squared Error: 118.89
+Root Mean Squared Error: 10.90
+Mean Absolute Error: 9.64
+Mean Absolute Percentage Error: 1.07%
+
+
+Conclusion
+In conclusion, our TransformerDecoderKAN model represents a novel approach to time series forecasting, combining the sequential modeling power of Transformer Decoders with the universal function approximation capabilities of KAN-inspired activations. By leveraging both architectures, we aim to capture complex temporal dynamics and non-linear relationships in time series data more effectively than traditional methods.

@@ -1,0 +1,20 @@
+🚀 Day Trading With Python: The Advanced Guide (5000+ words)
+🧭 Sections:
+Intro: Transition from beginner to advanced thinking
+
+Amihud Illiquidity Alpha: Risk + volume-based trades
+
+Cointegration for Pairs Trading: Mean-reversion at scale
+
+XGBoost 2.0 + Numerai Signals: Feature-rich modeling
+
+Backtrader + Custom Data Pipelines: Real backtesting frameworks
+
+Fourier + ARIMA + LSTM Combo: Hybrid time series prediction
+
+Trend Classification Techniques (6-way): Strategy comparison showdown
+
+Stacked LSTM Model Deep Dive: Advanced neural forecasting
+
+Finishing Touches: Robust deployment, risk analysis, future paths
+

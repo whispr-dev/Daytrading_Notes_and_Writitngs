@@ -1,0 +1,176 @@
+
+Write
+
+Tomthornto
+Stop-Loss, Take-Profit, Triple-Barrier & Time-Exit: Advanced Strategies for Backtesting
+Jakub Polec
+Jakub Polec
+
+·
+Follow
+
+8 min read
+·
+Sep 14, 2024
+70
+
+
+
+
+
+
+In this post, we’ll cover:
+
+Implementation Triple-Barrier Method by Marcos López de Prado, and why time-based exits are critical for risk management,
+common challenges in implementing Stop-Loss, Take-Profit mechanisms in backtests and how we addressed them,
+Strategies using Stop-Loss (SL), Take-Profit (TP), Trailing Stop-Loss (TSL), and Time-Based Exits.
+— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+
+FULL CODE AND TEXT AT https://quantjourney.substack.com
+
+— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+
+Stop-loss and take-profit mechanisms are critical for managing risk and locking in profits during trading. However, implementing them in a backtester is not always straightforward, and some common pitfalls arise across various platforms. Our goal is to help you understand these issues and demonstrate why our approach avoids them.
+
+SL/TP Rules Overview:
+Stop-Loss (SL) and Take-Profit (TP) are determined by two factors: the entry price (the price at which the position was opened) and the returns since entry.
+SL checks if the price has dropped below a certain percentage since the entry.
+TP checks if the price has risen above a certain percentage since the entry.
+These exit conditions depend solely on the price relative to the entry price, not on the size of the position.
+For strategies involving dynamic position sizing (such as volatility scaling, risk parity, etc.), SL/TP is still applied relative to the price movement since entry, ensuring consistent exit conditions regardless of position size (check post on Position Sizing at: https://quantjourney.substack.com/p/position-sizing-strategies-for-algo)
+Interaction Between Signals and Positions with SL
+In QuantJourney, we’ve separated generate_signals from generate_positions. The former handles all signals within strategies, while the latter sets appropriate positions, units, and applies risk-parity, among other functions. Consequently, we implement SL/TP in generate_positions, keeping them distinct from signals as previously mentioned.
+
+To summarize:
+
+Signals indicate the intended direction of the trade (buy or sell).
+Positions represent the actual holdings of the asset (i.e., the quantity of the asset owned).
+Most Issues with SL/TP in Backtesters:
+Delayed Exits: Some systems (mostly those which rely on signal-only or bar-end processing) wait for the next signal before applying SL/TP, leading to late exits and unnecessary losses. In QuantJourney we monitor SL/TP conditions continuously and exits immediately when hit, regardless of signals, ensuring timely risk management.
+Signal vs SL/TP Confusion: In some backtesters, SL/TP is too tied to signals, causing confusion when a signal says “hold” but an SL exit is needed. We keep SL/TP exits separate from signals to avoid conflicting decisions.
+Failure to Reset Entry Points: Some backtesters don’t reset cumulative returns properly after SL/TP exits, leading to distorted performance metrics. We reset returns after each trade to ensure accuracy.
+Over-trading After SL/TP Exits: Allowing immediate re-entry after an SL/TP exit can cause over-trading. We prevent this by requiring a fresh signal before re-entering the trade, reducing excessive churn.
+Limited Exit Strategy Options: Most backtesters lack advanced exit strategies like trailing stops or time-based exits. Our system includes these options, offering more control and alignment with real-world trading practices.
+No Support for Partial Exits: Many platforms don’t handle partial exits, missing out on the flexibility real traders use to scale out of trades. Our system supports partial exits for more realistic and flexible trade management.
+Let’s break down the key steps for SL/TP implementation:
+
+1. Signals Generation
+When your strategy generates signals, it essentially dictates whether the model should:
+
+Enter a position (buy or sell), or
+Exit a position (close the trade).
+For instance, consider a moving average crossover strategy:
+
+
+Buy Signal: When the short-term moving average crosses above the long-term moving average.
+Sell Signal: When the short-term moving average crosses below the long-term moving average.
+These signals act as binary indicators (1 for entering a position, 0 for exiting a position) in the code.
+
+2. Stop-Loss Mechanism
+A Stop-Loss (SL) is a price threshold set to limit losses if the market moves against your position. When the price moves unfavorably by a specified percentage or amount, the SL automatically triggers an exit, even if the strategy’s signal remains unchanged.
+
+Here’s how it works:
+
+Initial Entry: When a buy signal (or sell) is triggered, a position is opened — for instance, purchasing 100 shares of a stock at $100.
+Monitoring SL: Once the position is open, the strategy continuously compares the current market price to the stop-loss level. No action is taken if the price stays above the stop-loss.
+Stop-Loss Trigger: If the stop-loss is set at -5% and the price falls to $95, the stop-loss activates, and all positions are closed.
+Scenario 1: Stop-Loss Triggered
+Position closes immediately, overriding active signals. No re-entry until new signal appears, preventing repeated losses.
+
+Scenario 2: Signal Changes Before Stop-Loss
+Position closes due to signal change, not stop-loss. Stop-loss has no effect in this case.
+
+Let’s examine some code for strategies implementing SL/TP. Here’s a simple SL strategy applied after volatility-scaled positioning:
+
+
+Let’s analyse the code:
+
+stop_loss_exits = (returns_since_entry <= -self.stop_loss_pct) & (positions != 0)
+The stop-loss exit triggers when two conditions are met:
+
+Return below threshold:
+returns_since_entry &lt;= -self.stop_loss_pctchecks if the position's return has fallen below the stop-loss percentage.
+returns_since_entry is the position's percentage return since opening.
+self.stop_loss_pct is the preset stop-loss threshold (e.g., 5%).
+Active position:
+positions != 0 verifies an open position exists.
+positions represents the number of units held for each asset.
+Now, let’s examine the following two lines of code:
+
+positions[exits] = 0
+positions = positions.ffill().fillna(0)
+These lines handle position exits:
+
+positions[exits] = 0: Closes positions where either SL or TP conditions are met. If handling SL separately, use positions[stop_loss_exits] = 0.
+positions = positions.ffill().fillna(0): Maintains data consistency by filling gaps and setting missing values to 0.
+3. Trailing Stop-Loss Overview
+Let’s explore the trailing stop-loss (TSL), a dynamic risk management technique that protects gains while allowing positions to remain open during favorable price movements. The TSL level adjusts based on the highest price reached since entry, triggering an exit if the price falls by a preset percentage from its peak.
+
+TSL Operation:
+
+Entry: TSL level set at position opening
+Adjustment: TSL rises with price increases
+Exit: Position closes if price drops below TSL
+
+Code Analysis:
+Entry Points and Prices
+entry_points = signals.diff().fillna(signals)
+entry_prices = self.instruments_data.get_feature('strategies', self.strategy_name, 'entry_prices', default=pd.DataFrame(index=close.index, columns=close.columns))
+entry_prices = entry_prices.where(positions == 0, close * entry_points).fillna(method='ffill')
+entry_points: Detects new positions (signals from 0 → 1)
+entry_prices: Records entry prices
+Maximum Price Tracking
+max_price_since_entry = self.instruments_data.get_feature('strategies', self.strategy_name, 'max_price_since_entry', default=close.copy())
+max_price_since_entry = np.maximum(max_price_since_entry, close).where(positions != 0, close)
+max_price_since_entry: Tracks highest price since entry
+3. TSL Level Calculation
+
+trailing_sl_level = max_price_since_entry * (1 - self.trailing_sl_pct)
+Sets TSL below max price (e.g., 5% trailing stop)
+Exit Implementation
+trailing_sl_exits = (close <= trailing_sl_level) & (positions != 0)
+positions[trailing_sl_exits] = 0
+positions = positions.ffill().fillna(0)
+Closes positions when price hits TSL level
+4. Time-Based Exit
+A Time-Based Exit strategy ensures that positions are closed after a specific number of days, regardless of price movement. This helps reduce prolonged exposure to risk and ensures that capital isn’t tied up in non-performing trades.
+
+See code:
+
+# Initialize holding periods
+holding_periods = holding_periods + 1
+# Define time-based exit condition
+time_exits = holding_periods >= self.max_holding_period
+# Close positions that meet the time-based exit condition
+positions[time_exits] = 0
+# Reset holding periods for exited positions
+holding_periods = holding_periods.where(~time_exits, 0).fillna(0)
+It is also used in the Triple Barrier Method, introduced by Marcos López de Prado in his book Advances in Financial Machine Learning. It provides a robust framework for labeling financial data, helping traders identify when to exit trades based on three main conditions:
+
+Profit-taking barrier (Take Profit): Exits the position if the price moves favourably by a predefined percentage.
+Stop-loss barrier: Exits the position if the price moves unfavourably by a predefined percentage.
+Time barrier (Time Exit): Exits the position after a certain period of time, regardless of price movement.
+The idea is to label the data dynamically based on these conditions, enabling better risk management and ensuring that trades are not held indefinitely. The method captures the market’s direction and volatility without over-relying on predefined signals, making it more suitable for real-world trading scenarios. This method is particularly useful for machine learning applications in finance because it reduces the bias of holding positions too long and captures both positive and negative market moves effectively.
+
+A time-based exit strategy closes a position after a specific number of days or bars, regardless of price movements. Time exits offer several benefits:
+
+Reducing Exposure to Risk: Markets can remain irrational longer than a strategy can stay profitable. Prolonged position holding may increase exposure to unpredictable events.
+Capturing Short-term Opportunities: For strategies targeting short-term price moves (e.g., momentum or mean-reversion), extended holding periods can lead to diminishing returns or reversals.
+Avoiding Overfitting: A fixed time-exit helps prevent overfitting to specific price patterns that may not be reliable in the long term.
+Incorporating a time-based exit also balances a portfolio’s trading horizon. For example, if a signal suggests entering a trade, but the price doesn’t move as expected after a given period (e.g., 14 days), it may be prudent to exit the position and reallocate resources elsewhere.
+
+
+Code Analysis:
+holding_periods: Counts active trading days for each position.
+time_exits: Closes positions held for max_holding_period days or longer.
+5. Partial Exits Implementation
+You can implement partial exits to take profits once the price has increased significantly.
+
+# Define partial exit condition (e.g., taking profit on half the position)
+partial_take_profit = (returns_since_entry >= self.partial_take_profit_pct) & (positions > 0)
+# Calculate the amount to exit (e.g., 50% of the current position)
+positions[partial_take_profit] *= 0.5
+# Ensure no negative positions
+positions = positions.clip(lower=0)
+Conclusion
+With these techniques, we have the flexibility to implement sophisticated risk management strategies in our QuantJourney Backtester. We’ll begin releasing 1–2 fully vectorised strategies each week. This will allow you to see these principles in action in real-world simulations.

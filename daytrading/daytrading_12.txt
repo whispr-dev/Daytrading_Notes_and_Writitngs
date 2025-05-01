@@ -1,0 +1,401 @@
+Quant Trading Framework in Python (part 2) — how to invest like professionals
+Jakub Polec
+Jakub Polec
+
+·
+Follow
+
+9 min read
+·
+Apr 8, 2024
+113
+
+
+
+
+
+
+Here you can read about Quant Trading Framework. The goal is to assist you in creating and backtesting investment strategies, providing a dynamic platform that can be tailored to your unique requirements and insights.
+
+My philosophy balances robustness and simplicity for financial trading. I do my best to build a strong, user-friendly platform for both novice and experienced investors, focusing on efficiency and simplicity. So that any investor who chooses a hands-on approach will be able to use it.
+
+This framework is more than a tool. It’s a comprehensive platform designed with the investor in mind, featuring a wide array of functionalities that make investing more efficient, thorough, and accessible.
+
+What’s Inside the Framework?
+The framework contains multiple classes and functions, but here you can get high-level views and functionalities.
+
+The code for complete Quant Trading Framework is at GitHub — for paid subscribers at quantjourney.substack.com
+
+Connectors — which allow to download to data (both OHLCV and fundamental):
+
+EOD Historical Data — OHLCV and fundamental for most US / WW equities,
+FRED — the Federal Reserve Economic Data with vast economic and macro data,
+Quandl — with wealth of economic indicators and financial data,
+OANDA — for most Forex data,
+CCXT — for crypto, and currently used for getting Bitcoin data, but can be easily extended for other markets and other cryptocurrencies.
+SEC — Securities and Exchange Commission with lots of filings (10K, 13F datasets, etc.) and crucial for fundamental analysis. We will go deeper with 13F in coming weeks, as there are quite nice trading ideas with it,
+Y-Finance — for multiple data, mostly OHLCV for equities, etfs, crypto, etc.
+CNNFG — the connector for downloading and parsing CNN Fear and Greed data,
+TipRanks — the connector for downloading and parsing TipRanks data,
+Investing.com — the connector for getting data from Investing.com.
+At this stage some features are not yet fully implemented as currently we progress with the Backtesting engine, which already has sufficient data available. We plan to finish them in the coming weeks.
+
+Assets — the wrappers to simplifying the data retrieval:
+Bonds — to get data about bonds,
+CFDs — contracts for difference data,
+Equities — everything with equities from OHLCV eod data, to live data, and many fundamental from mcap, dividend, as well as parts of Income Statement, Cash Flow and Balance Sheet information per year/quarter/date (see below paragraph on fundamental indicators),
+ETFs — exchange traded funds,
+Forex — all with forex data,
+Commodities — for commodity trading info,
+Indices — wrapper to get / sync all indices WW, US and others,
+Macro — wrapper for macro / trends data,
+REITS — for Real Estate Investment Trust,
+Futures — with futures.
+Data Manager — which serves as the central hub for data storage and retrieval from DBs.
+It is engineered to interface with multiple types of databases and storage systems, offering a flexible and powerful way to manage financial data. Currently implemented:
+
+ArcticDB
+MongoDB
+S3 / storage in the cloud
+KDB+ (started implementation)
+Redis
+Here are some design principles:
+I use the aiohttp and asyncio libraries together for asynchronous database access, enhancing performance and efficiency for data storage and retrieval. This method uses Python’s asyncio for concurrent code execution, allowing multiple operations to run in parallel without interference. Additionally, aiohttp, made for asynchronous HTTP requests, facilitates non-blocking network communication. Together, these libraries offer a strong solution for both writing and reading from databases asynchronously. This allows the application to move on to the next task without waiting for database operation to finish. It can manage other requests or computations, thus improving throughput and reducing response times.
+
+See some code for data fetch module:
+
+''''
+    Data Fetch - Data library for QuantJP
+    
+    The Data Fetch module forms an integral part of the QuantJP framework, focusing on efficient and reliable retrieval of financial market data from diverse sources. 
+    Built with a strong emphasis on asynchronous operations, this module leverages aiohttp to perform high-speed data fetching and validation, ensuring rapid access 
+    to data crucial for quantitative analysis and algorithmic trading strategies in hedge funds.
+
+    Through its design, the Data Fetch module provides a versatile and scalable approach to handle data requests, offering functionalities like URL validation, 
+    batch URL fetching with retry logic, and simplified access to external financial data APIs. It adeptly handles various data formats and response codes, 
+    facilitating a smooth integration with the broader QuantJP ecosystem.
+
+    Features:
+    - Asynchronous URL validation and data fetching to maximize efficiency in data retrieval operations.
+    - Comprehensive error handling and retry mechanisms to ensure data integrity and availability.
+    - Support for dynamic parameterization of requests, catering to a wide range of external data sources and APIs.
+    - Integration with QuantJP's logging system to provide clear and actionable insights into the data fetching process.
+    
+    author: jpolec
+    date: 2024-03-01
+
+'''
+
+import os
+import sys
+import json
+import pandas as pd
+import random
+from typing import List, Tuple, Optional, Dict
+
+import aiohttp
+import asyncio
+
+# Dynamically add the grandparent directory to the Python path
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+# Logger
+from qlib.data.utils.data_logs import data_logger
+logger = data_logger()
+
+import warnings
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
+
+async def async_url_validation(urls: List[str]) -> List[Tuple[str, bool]]:
+    """
+    Asynchronously validates a list of URLs.
+
+    Args:
+        urls (List[str]): List of URLs to validate.
+
+    Returns:
+        List[Tuple[str, bool]]: List of tuples containing the URL and a boolean indicating whether it is valid.
+    """
+    async with aiohttp.ClientSession() as session:
+        async def validate_url(url):
+            try:
+                async with session.get(url) as response:
+                    return url, response.status == 200
+            except aiohttp.ClientError as e:
+                logger.error(f"Error validating URL {url}: {e}")
+                return url, False
+
+        return await asyncio.gather(*[validate_url(url) for url in urls])
+
+
+async def async_aiohttp_get_all(urls: List[str], 
+                                headers: Optional[Dict[str, str]] = None, 
+                                params: Optional[Dict[str, str]] = None, 
+                                max_tries: int = 10, fmt: str = "json", 
+                                sleep_seconds: int = 3) -> List[Optional[bytes]]:
+    """
+    Asynchronously fetches data from multiple URLs using aiohttp.
+
+    Args:
+        urls (List[str]): List of URLs to fetch data from.
+        headers (Optional[Dict[str, str]], optional): Headers to include in the request. Defaults to None.
+        params (Optional[Dict[str, str]], optional): Query parameters to include in the request. Defaults to None.
+        max_tries (int, optional): Maximum number of retry attempts. Defaults to 10.
+        fmt (str, optional): Format of the response. Defaults to "json".
+        sleep_seconds (int, optional): Number of seconds to sleep between retry attempts. Defaults to 3.
+
+    Returns:
+        List[Optional[bytes]]: List of responses fetched from the URLs. Each response is either the JSON content (if fmt="json")
+        or the text content (if fmt!="json"). If an error occurs, the corresponding entry in the list will be None.
+    """
+    default_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Upgrade-Insecure-Requests': '1'
+    }
+
+    if headers is None:
+        headers = default_headers
+    else:
+        headers = {**default_headers, **headers}
+
+    if params is None:
+        params = {}
+
+    async with aiohttp.ClientSession() as session:
+        async def fetch(url, tries=0):
+            try:
+                async with session.get(url, headers=headers, params=params) as response:
+                    logger.debug(f"try {url} - attempt {tries + 1}/{max_tries}")
+
+                    if response.status == 200:
+                        return await response.json() if fmt == "json" else await response.text()
+                    elif response.status == 429:
+                        if tries < max_tries - 1:
+                            logger.info(f"Retrying {url} - attempt {tries + 2}/{max_tries}, sleeping for {sleep_seconds}s")
+                            await asyncio.sleep(sleep_seconds)
+                            return await fetch(url, tries + 1)
+                        else:
+                            logger.error(f"Max retries exceeded for {url}: {response.status}")
+                    elif response.status == 404:
+                        logger.warning(f"URL {url} not found: {response.status}")
+                    else:
+                        logger.error(f"Unexpected response from {url}: {response.status}, {await response.text()}")
+            except aiohttp.ClientError as e:
+                logger.error(f"Error fetching URL {url}: {e}")
+
+        results = [await fetch(url) for url in urls]
+        return results
+
+
+async def async_url_fetch(url: str, 
+                          headers: Optional[Dict[str, str]] = None, 
+                          params: Optional[Dict[str, str]] = None) -> bytes:
+    """
+    Asynchronously fetches data from a URL using aiohttp.
+
+    Args:
+        url (str): The URL to fetch data from.
+        headers (Optional[Dict[str, str]], optional): Headers to include in the request. Defaults to None.
+        params (Optional[Dict[str, str]], optional): Query parameters to include in the request. Defaults to None.
+
+    Returns:
+        bytes: Response content.
+    """
+    default_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+
+    if headers is None:
+        headers = default_headers
+    else:
+        headers = {**default_headers, **headers}
+
+    if params is None:
+        params = {}
+
+    # Extend params with API token if it exists
+    if os.getenv('EOD_KEY'):
+        params['api_token'] = os.getenv('EOD_KEY')
+
+    async with aiohttp.ClientSession(headers=headers) as session:
+        tries = 0
+        while tries < MAX_RETRIES:
+            try:
+                delay = random.uniform(1, 5)    # Random delay between 1 and 5 seconds
+                async with session.get(url, headers=headers, params=params) as response:
+                    if response.status == 200:
+                        raw_content = await response.read()
+                        return raw_content
+                    else:
+                        logger.error(f"Error fetching URL {url}: status code {response.status}")
+                        tries += 1
+                        if tries < MAX_RETRIES:
+                            await asyncio.sleep(RETRY_DELAY)
+                        else:
+                            raise aiohttp.ClientError(f"Max retries reached for URL {url}")
+            except aiohttp.ClientError as e:
+                logger.error(f"Error fetching URL {url}: {e}")
+                tries += 1
+                if tries < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_DELAY)
+                else:
+                    raise
+             
+                
+async def async_fetch_index_data(url, 
+                                 table_index, 
+                                 ticker_column='Ticker', 
+                                 company_column='Company', 
+                                 index_name=None, 
+                                 currency='USD', 
+                                 currency_name='US Dollar', 
+                                 ticker_transformation=None):
+    """
+    Asynchronously fetch index data from a specified URL and table index.
+
+    Args:
+        url (str): URL to fetch data from.
+        table_index (int): Index of the table on the page to use.
+        ticker_column (str, optional): Name of the ticker column. Defaults to 'Ticker'.
+        company_column (str, optional): Name of the company column. Defaults to 'Company'.
+        index_name (str, optional): Name of the index fund. Defaults to None.
+        currency (str, optional): Currency code. Defaults to 'USD'.
+        currency_name (str, optional): Full name of the currency. Defaults to 'US Dollar'.
+        ticker_transformation (callable, optional): Function to transform ticker values. Defaults to None.
+
+    Returns:
+        pd.DataFrame: Dataframe containing index data.
+    """
+    try:
+        # Fetch the HTML content asynchronously
+        html_content = await async_url_fetch(url) 
+        df_list = pd.read_html(html_content)
+        df = df_list[table_index]
+        
+        if ticker_transformation:
+            df[ticker_column] = df[ticker_column].apply(ticker_transformation)
+        
+        df = df.rename(columns={ticker_column: 'Ticker', company_column: 'Company'})
+        df['Index Fund'] = index_name
+        df['Currency'] = currency
+        df['Currency_Name'] = currency_name
+        
+        return df[['Ticker', 'Company', 'Index Fund', 'Currency', 'Currency_Name']]
+    except Exception as e:
+        print(f"An error occurred while fetching data from {url}: {e}")
+        return pd.DataFrame(columns=['Ticker', 'Company', 'Index Fund', 'Currency', 'Currency_Name'])
+Backtesting Engine
+As everyone is eager to test their strategies, we’re developing a framework for executing backtesting which is working on top of Trading Framework, and can get data directly from DBs (Data Manager), etc. This is our focus now. Most of the work is already done, and we expect to finish in about a week.
+
+The backtesting framework engine is fully written using the vector capabilities of Pandas and NumPy objects and is further accelerated by Numba for speedy and scalable data analysis. Complex data is pre-processed by creating primary information vectors. Based on certain criteria, we calculate eligibility, which is a function of tradeability and other strategy parameters. From these, basic signals are generated.
+
+Thanks to its high performance, our backtest engine can process large amounts of data, even without the use of a GPU or parallelization. This allows users to interact with data-intensive widgets without experiencing significant delays.
+
+My backtests for 500 equities of the S&P500, using a simple RSI strategy (buy/sell) over 10 years, takes a few seconds. I am currently working to improve this further.
+
+The backtesting framework contains modules as:
+
+Cost Model — provides a base class for cost models and several implementations of cost models,
+Market Regime — for identifying the market regime based on a set of indicators,
+PNL Calculator — for calculating profit and loss (PnL) metrics for a trading strategy,
+Portfolio Manager — for managing the portfolio of a trading strategy,
+Position Manger — for managing the positions of a trading strategy,
+Risk Manager — for managing risk in trading strategies,
+Signal Generator — for generating trading signals based on market data,
+Volatility Model — for fitting, forecasting, and analyzing volatility models,
+and another two for ML / AI parts.
+
+The goal was to create a highly modular and customizable backtesting framework that anyone can easily adapt.
+
+Each strategy can be developed by combining technical and fundamental indicators. Two libraries, technical_indicators and fundamental_indicators, are essential for calculating the required conditions for the strategy. Below is a simple JSON description of the strategy signals:
+
+"signals": {
+            "buy_signals": {
+                "SMA_10_50_crossover": "SMA(10) > SMA(50)",
+                "RSI_oversold": "RSI(14) < 30",
+                "MACD_signal": "MACD(12, 26, 9) > 0",
+                "PE_signal": "PE > 10",
+            },
+            "sell_signals": {
+                "SMA_10_50_reverse_crossover": "SMA(10) < SMA(50)",
+                "RSI_overbought": "RSI(14) > 70",
+            },
+            "strategies": {
+                "trend_following": {
+                    "description": "A trend-following strategy",
+                    "buy": "SMA_10_50_crossover AND RSI_oversold",
+                    "sell": "SMA_10_50_reverse_crossover OR RSI_overbought"
+                },
+                "momentum": {
+                    "description": "A momentum-based strategy",
+                    "buy": "MACD_signal",
+                    "sell": "RSI_overbought"
+                },
+                "mean_reversion": {
+                    "description": "A mean-reversion strategy",
+                    "buy": "RSI_oversold",
+                    "sell": "RSI_overbought"
+                },
+            }
+        },
+However, there is a bit more for the modules to parametrize any strategy you would like to execute, e.g.:
+
+"benchmark": "S&P 500",  	
+	      "data_resolution": "daily", 
+        "max_positions": 10,
+        "leverage_ratio": 1.0,  # No leverage by default
+        "eligibility_criteria": {
+            "active_threshold": 0.05,
+            "volatility_threshold": 0.0002,
+            "liquidity_threshold": 1000000,
+            "excluded_sectors": ["Banking", "Technology"]
+        },
+        
+        "volatility_model": {
+            "model": "GARCH",
+            "parameters": {
+                "p": 1,
+                "q": 1,
+                "o": 1,
+            },
+        },
+        
+        "liquidity_constraints": {
+                        "min_daily_volume": 100000,  
+                        "max_bid_ask_spread": 0.0002,  
+        },
+        
+        "market_regime": {
+            "moving_average_period": 20,
+            "breadth_threshold": 0.5,
+        },
+        
+        "risk_management": {
+            "stop_loss_level": 0.1,  
+            "max_drawdown": 0.2,  
+            "volatility_scaling": 1.0, 
+        },
+        
+        "transaction_costs": {
+            "commissions": 0.001,  	
+            "execution": 0.005,  	
+            "swap": 0.0001,  		
+            "slippage": 0.0005,  	
+        },
+        
+        "regulatory_constraints": {
+            "position_limits": True,  
+            "short_selling": False,  
+            "pattern_day_trader": False,  
+        }
+The rest will be completed soon. In the coming weeks, I will begin publishing a backtesting framework engine (the code will be available to paid subscribers).
+
+As always, the full code is available on GitHub for paid subscribers on quantjourney.substack.com.
+
+If you wish to access the complete code, please subscribe to support my work. Thank you.

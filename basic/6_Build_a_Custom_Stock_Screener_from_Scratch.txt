@@ -1,0 +1,181 @@
+📊 The Beginner's Blueprint to Day Trading with Python
+Part 6: Build a Custom Stock Screener from Scratch
+✦ What’s a Stock Screener?
+A stock screener filters thousands of tickers down to the few that match your custom criteria.
+
+It answers questions like:
+
+Which stocks are trading near their 52-week highs?
+
+Which have high volume today?
+
+Which are oversold by RSI?
+
+Which have a market cap over $100B?
+
+Most traders rely on websites (e.g., Finviz), but you can build your own tailored screener — way more powerful.
+
+✦ The Screener We’ll Build Today
+Using S&P 500 tickers, we’ll:
+
+Pull last 1-year of daily data
+
+Calculate:
+
+52-week high / low
+
+% from 52W high
+
+Market cap
+
+Current RSI
+
+Filter for:
+
+Stocks within 10% of their 52-week high
+
+Market cap above $10B
+
+RSI under 70 (not already overbought)
+
+Then we’ll export the results to an Excel file for viewing.
+
+💾 Full Python Script: Screener
+📄 strategies/sp500_screener.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# 1. Load tickers
+sp500 = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
+tickers = sp500['Symbol'].tolist()
+tickers = [t.replace('.', '-') for t in tickers]  # yfinance uses '-' not '.'
+
+# 2. Define timeframe
+end = datetime.today()
+start = end - timedelta(days=365)
+
+results = []
+
+def calculate_rsi(close_prices, period=14):
+    delta = close_prices.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+# 3. Process each stock
+for symbol in tickers:
+    try:
+        data = yf.download(symbol, start=start, end=end, progress=False)
+
+        if data.empty or len(data) < 100:
+            continue
+
+        close = data['Close']
+        high_52 = close.max()
+        low_52 = close.min()
+        current = close[-1]
+        percent_from_high = 100 * (high_52 - current) / high_52
+        rsi = calculate_rsi(close).iloc[-1]
+
+        info = yf.Ticker(symbol).info
+        market_cap = info.get("marketCap", np.nan)
+
+        results.append({
+            'Symbol': symbol,
+            'Current Price': round(current, 2),
+            '52W High': round(high_52, 2),
+            '52W Low': round(low_52, 2),
+            '% From High': round(percent_from_high, 2),
+            'RSI': round(rsi, 2),
+            'Market Cap ($B)': round(market_cap / 1e9, 2) if market_cap else np.nan
+        })
+    except Exception as e:
+        print(f"Error processing {symbol}: {e}")
+        continue
+
+# 4. Compile DataFrame
+df = pd.DataFrame(results)
+
+# 5. Filter
+filtered = df[
+    (df['% From High'] < 10) &
+    (df['Market Cap ($B)'] > 10) &
+    (df['RSI'] < 70)
+].sort_values('% From High')
+
+# 6. Save to Excel
+df.to_excel("outputs/full_sp500_screen.xlsx", index=False)
+filtered.to_excel("outputs/filtered_screen.xlsx", index=False)
+
+print(f"\nSaved full and filtered screens to outputs/")
+🧠 How to Interpret the Results
+
+Symbol	Current	52W High	% From High	RSI	Market Cap ($B)
+AAPL	175.50	181.50	3.3%	56	2900
+NVDA	640.00	650.00	1.5%	69	1700
+MSFT	310.00	312.00	0.6%	61	2400
+This means AAPL is within 3.3% of its 52-week high, with a neutral RSI and a huge market cap. Could be a breakout setup if volume surges.
+
+🧪 Filter Variants You Can Add
+Change line 5 of filtering section to try other screener rules:
+
+python
+Copy
+Edit
+# Oversold stocks under $5B market cap, 20% off highs
+filtered = df[
+    (df['% From High'] > 20) &
+    (df['Market Cap ($B)'] < 5) &
+    (df['RSI'] < 30)
+].sort_values('% From High', ascending=False)
+Or maybe you want only the mega caps:
+
+python
+Copy
+Edit
+(filtered['Market Cap ($B)'] > 100) & (filtered['% From High'] < 5)
+💡 You’re not limited to RSI or price — you can add:
+
+MACD
+
+ATR (volatility)
+
+Moving average crossovers
+
+Sentiment
+
+We’ll get there.
+
+✨ Output File Structure
+By default, this generates:
+
+bash
+Copy
+Edit
+outputs/
+├── full_sp500_screen.xlsx      # All stocks with full data
+└── filtered_screen.xlsx        # Matching your screener criteria
+You can open these in Excel, Google Sheets, or pandas again later.
+
+✦ Coming Up Next: Option Pricing & Binary Payoff Models
+In Part 7, we’ll take a break from equities and get spicy:
+
+Learn what call and put options are
+
+Visualize payoffs using math + charts
+
+Build binary option pricing logic in Python
+
+Introduce Black-Scholes and Heaviside function usage
+
+This gives you superpowers for predicting risk/reward and building options strategies.

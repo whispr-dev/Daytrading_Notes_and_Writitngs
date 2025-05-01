@@ -1,0 +1,456 @@
+Dynamic Time Series Model Updating
+Enhancing Forecast Accuracy with Incremental Adjustments Without Rebuilding Models
+Shenggang Li
+Towards AI
+Towards AI
+Follow
+Towards AI
+Publication
+
+·
+53K Followers
+The leading AI community and content platform focused on making AI accessible to all
+
+Shenggang Li
+
+·
+Follow
+
+Published in
+Towards AI
+
+·
+13 min read
+·
+Sep 11, 2024
+238
+
+
+
+
+
+
+
+Photo by Mika Baumeister on Unsplash
+Understanding Incremental Learning
+Imagine you run an online store with a recommendation system. Each time a customer clicks or buys something, the system instantly updates its suggestions.
+
+If you had to rebuild the whole model whenever new data came in, it would be slow and expensive. Instead, we use incremental adjustments, allowing the predictive model to update its recommendations quickly after each interaction.
+
+This method is known as incremental learning or online learning. It allows the system to continuously improve its predictions without refitting the model.
+
+Applying Incremental Learning to Time Series Forecasting
+Building and applying business predictive models is a key part of my job. I enjoy working with time series analysis because it’s practical and interesting.
+
+But I’ve learned that this work is quite challenging:
+
+First, time changes everything. A time series forecasting model that works today might be outdated tomorrow. This makes it hard to keep up.
+
+Second, verifying models is difficult because you can only test them with future data, meaning you won’t know if they truly work until later.
+
+Third, training data is often valid only within a certain time range, which is frequently unknown, making it difficult to maintain reliable forecasts over time.
+
+Lastly, many software tools focus much on algorithms while overlooking the critical importance of proper data handling. For instance, no tool tells me on which specific data is the best for building a time series model to predict next week’s sales.
+
+This is why, in this paper, I apply incremental learning to time series forecasting.
+
+My Work and Your Takeaways from This Paper
+Let’s address these challenges.
+
+I’ll walk through examples of how linear models, like the Yule model, can be updated using formulas like Sherman-Morrison to gradually improve performance.
+
+For those interested in non-linear models like neural networks for time series forecasting, I’ll also show how incremental learning can dynamically update these models and the math behind it.
+
+By the end of this paper, you’ll understand why dynamic model updating is so practical and how to use it to build and fine-tune various machine learning models for time series forecasting.
+
+Apply Sherman–Morrison Formula to Update Linear Regression Model
+Traditional predictive models are usually recalibrated by splitting the data into X (features) and Y (targets) at a fixed point in time, T, and then recalculating from that point:
+
+
+Similarly, time series models, such as the Yule (autoregressive) model, can be structured as:
+
+
+These models can be refitted when new data is added, this approach can be inefficient, especially with large datasets, as it demands significant computational resources.
+
+I will explain how the Sherman–Morrison formula can be used to update linear regression models’ coefficient estimates dynamically. This technique allows us to update the model with new data efficiently without refitting the entire model.
+
+Linear regression aims to create the following mathematical relationship:
+
+
+The coefficient vector β is estimated by minimizing the sum of squared residuals, known as the least squares criterion:
+
+
+In the case of linear regression, the closed-form solution for β is given as:
+
+
+We can also approach this problem iteratively using gradient descent, which can also be useful for extending the methodology to nonlinear models:
+
+
+Where, the parameters are updated iteratively by moving in the direction opposite to the gradient. The update rule for β at iteration t is:
+
+
+Here, η the learning rate, which controls the step size in the direction of the gradient. We can dynamically update the inverse of the matrix:
+
+
+when new rows of data are added. This is where the Sherman–Morrison formula comes into play:
+
+
+where the new data as a single row. Using this formula, we can update the coefficient estimate β dynamically:
+
+
+Or in gradient update form:
+
+
+We can extend the single-row Sherman–Morrison formula to its block form. The block version allows us to update the inverse matrix for multiple rows U and V:
+
+
+This approach allows efficient updates to the model without refitting from scratch, even when multiple rows of data are added.
+
+While this paper focuses on applying the Sherman-Morrison formula to the linear model (Yule), a similar approach can be adapted for more complex models like Neural Networks. Although the exact method isn’t feasible for NNs, alternative techniques can be used for dynamic updates when new data comes in. Future research will explore these applications in detail.
+
+Steps and Coding for Dynamic Linear Model Updates
+When updating linear time series model such as Yule, several key factors must be considered, including training parameters, seasonality, quadratic terms, and the ability to customize the model. These factors can significantly influence the accuracy of time series forecasting and ensure the model remains effective over time.
+
+Initial Model:
+Data Preparation: Start by selecting recent data points to construct an initial model. In this case, the Yule model is used, but other linear regression models can be applied. Add seasonality terms and quadratic terms if needed.
+Model Construction: The model is fitted using the selected data points. The regression model type can be customized, allowing for flexibility in the model selection (e.g., LinearRegression or other regression algorithms).
+
+2. Prediction and Validation:
+
+Prediction: Once the initial model is created, it will forecast future data points. In this step, prediction error is calculated to help assess the model’s performance.
+Validation: To check the accuracy of the model’s predictions, a validation set is used. This step measures the model’s performance before further updates.
+3. Model Update Using Sherman–Morrison Formula:
+
+Incorporate New Data: As new data arrives, the model is updated dynamically without being refitted.
+Sherman–Morrison Formula: It works by incrementally adjusting the matrix with the new data. In the case of multiple data points added at once, the block Sherman–Morrison formula is used.
+4. Iterative Revalidation and Early Stopping
+
+Validation: After each update, the model is re-evaluated by predicting the validation set again. The error is compared to the previous steps to check for improvements.
+Early Stopping: The iterative process of updating, predicting, and validating continues until the model error stops improving significantly. This avoids overfitting and ensures the model remains stable while dynamically incorporating new data.
+Python Code Example:
+
+In this study, I analyze industry energy consumption trends over time using the “Electric Production” dataset from Kaggle Dataset
+
+Data Loading and Preprocessing:
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+file_path = 'Electric_Production_tm.csv'
+data = pd.read_csv(file_path)
+data['DATE'] = pd.to_datetime(data['DATE'])  # Convert DATE to datetime format
+data = data.set_index('DATE')  # Set DATE as index
+Loads a CSV file containing electricity production data.
+Converts the DATE column to datetime format and sets it as the index for easier time-series manipulation.
+2. Dynamic Yule Model Update Function Definition:
+
+def dynamic_yule_model_block_update(data, 
+                                    target_variable='IPG2211A2N', 
+                                    holdout_points=5,  # Most recent 5 points for validation
+                                    step_size=1,
+                                    early_stop_rounds=3,
+                                    initial_points=50,  # Start with 50 points for initial training
+                                    total_steps=13,  # Add this parameter to control the range
+                                    seasonality_terms=True,
+                                    add_quadratic_terms=True,
+                                    regressor_type=LinearRegression,  # Using Linear Regression model
+                                    verbose=True,
+                                    plot_results=True):
+This function dynamically updates a linear regression model using block Sherman-Morrison updates:
+
+target_variable: The dependent variable.
+holdout_points: Data points held for validation.
+step_size: Number of data points to add in each dynamic update.
+regressor_type: Defines the regression model to use.
+3. Feature Engineering:
+
+y = data[target_variable].values
+n = len(y)
+X_full = []
+
+lag_1 = y[4:-1]
+lag_2 = y[3:-2]
+lag_3 = y[2:-3]
+lag_4 = y[1:-4]
+lag_5 = y[0:-5]
+
+X_full.append(lag_1)
+X_full.append(lag_2)
+X_full.append(lag_3)
+X_full.append(lag_4)
+X_full.append(lag_5)
+
+if add_quadratic_terms:
+    X_full.append(lag_1 ** 2)
+    X_full.append(lag_2 ** 2)
+    X_full.append(lag_3 ** 2)
+
+if seasonality_terms:
+    months = data.index.month
+    seasonal_effect_sin = np.sin(2 * np.pi * months / 12)
+    seasonal_effect_cos = np.cos(2 * np.pi * months / 12)
+    X_full.append(seasonal_effect_sin[4:-1])
+    X_full.append(seasonal_effect_cos[4:-1])
+
+X_full = np.column_stack(X_full)
+y_full = y[5:]
+The target variable y is extracted.
+Lagged variables (lag_1, lag_2, etc.) are created to use past values as predictors for future values.
+Optional quadratic terms and seasonal effects are added based on the function parameters.
+All features are combined into a matrix x_full, and the target variable is stored in y_full.
+4. Training and Validation Split and Initial Model Fitting:
+
+holdp = -1 * holdout_points
+initial_p = -1 * initial_points
+X_train = X_full[initial_p:holdp]
+y_train = y_full[initial_p:holdp]
+X_valid = X_full[holdp:]
+y_valid = y_full[holdp:]
+
+model = regressor_type().fit(X_train, y_train)
+y_pred_valid = model.predict(X_valid)
+validation_error = np.mean((y_valid - y_pred_valid)**2)
+Fits the specified regression model (by default, LinearRegression) on the training data.
+Calculates the validation error using Mean Squared Error (MSE).
+5. Sherman-Morrison Formula for Dynamic Updates:
+
+A_inv = np.linalg.inv(np.dot(X_train.T, X_train))
+
+def block_sherman_morrison_update(A_inv, U, V):
+    U_T_A_inv = np.dot(U.T, A_inv)
+    V_A_inv = np.dot(A_inv, V.T)
+    block_matrix = np.eye(U_T_A_inv.shape[0]) + np.dot(U_T_A_inv, V.T)
+    block_matrix_inv = np.linalg.inv(block_matrix)
+    A_inv_update = A_inv - np.dot(V_A_inv, np.dot(block_matrix_inv, U_T_A_inv))
+    return A_inv_update
+6. Dynamic Model Updating:
+
+   # Start dynamic updating by adding blocks of older data points at a time
+    for step in range(10, 0, -step_size):  # Adding older data points in blocks
+        # Add block of older data points (rows)
+        X_new = X_full[initial_p - step: initial_p - step + step_size]
+        y_new = np.array(y_full[initial_p - step: initial_p - step + step_size])
+
+        u = X_new.T
+        v = X_new
+
+        # Update A_inv using the block Sherman-Morrison update (for multiple data points)
+        A_inv_updated = block_sherman_morrison_update(A_inv, u, v)
+
+        # Update model coefficients without affecting the intercept
+        new_coef = np.dot(A_inv_updated, np.dot(X_train.T, y_train))
+        model.coef_ = new_coef
+
+        # Update the intercept separately
+        model.intercept_ = np.mean(y_train - np.dot(X_train, model.coef_))
+
+        # Predict on the validation set
+        y_pred_valid_new = model.predict(X_valid)
+        new_validation_error = np.mean((y_valid - y_pred_valid_new)**2)
+        if verbose:
+            print(f"Step {step}: Validation error after adding {step_size} older data points: {new_validation_error}")
+
+        # Check if the new error is better
+        if new_validation_error < best_error:
+            best_error = new_validation_error
+            best_step = step
+            A_inv = A_inv_updated
+            worse_count = 0  # Reset the worse count since error has improved
+        else:
+            worse_count += 1  # Increase the count for worse error
+            if worse_count >= early_stopping_rounds:
+                if verbose:
+                    print(f"Stopping early due to consecutive worse validation errors at step {step}.")
+                break
+            
+
+    print (y_pred_valid_new)
+
+    if verbose:
+        print(f"Best model found at step {best_step} with validation error: {best_error}")
+
+    if plot_results:
+        plt.plot(y_valid, label="Actual")
+        plt.plot(y_pred_valid, label="Predicted")
+        plt.title("Validation Results with Block Sherman-Morrison Updating")
+        plt.xlabel("Time")
+        plt.ylabel("Electricity Production")
+        plt.legend()
+        plt.show()
+       
+Dynamic updates: Adds older data points in blocks (controlled by step_size).
+Updates the model’s coefficients using the Sherman-Morrison formula, without refitting the entire model.
+Early stopping: The process stops when validation errors no longer improve.
+If plot_result is set to true, the actual and predicted results are plotted for visualization.
+# Run the function
+dynamic_yule_model_block_update(data, 
+                                step_size=1,
+                                seasonality_terms=True,
+                                add_quadratic_terms=True, 
+                                regressor_type=LinearRegression)
+Here’s the result:
+
+
+The initial model had a validation error of 37.39. Adding older data points improved performance, with the best result at step 7, where the validation error dropped to 5.33. After that, adding more data increased the error, leading to an early stop.
+
+Updating Neural Networks for Time Series Forecasting with New Data
+We’ve explored updating dynamic linear time series models. Now, let’s investigate how to apply a similar method to non-linear models, like Neural Networks.
+
+In non-linear time series forecasting, the goal is to reduce the error, often using Mean Squared Error (MSE). For a model M(x)=y built on N data points, we usually tweak the model’s parameters by minimizing this error with gradient descent. The tricky part is, when new data is added, how can we update the model without restarting the entire gradient process?
+
+Mathematical Intuition
+For a new data point (x_new, y_new), the updated loss function is:
+
+
+Here, M(x_new​,θ) is the predicted value for the new data point.
+
+The gradient update based on the new loss function is:
+
+
+Where, ∇M(x_new,θ) is the gradient of the model prediction with respect to the parameters θ. We can utilize this formula to update the model incrementally when new data arrives.
+
+
+This means:
+
+
+For models like logistic regression and neural networks (NNs), direct application of methods like Sherman–Morrison is not feasible due to nonlinearity. However, we can use the above formula in Stochastic Gradient Descent (SGD) to iteratively update the parameters.
+
+Dynamic Model Updating for Neural Networks
+
+Forward Pass (Prediction with New Data): For each new data point X_new, the neural network computes the predicted output using the current weights:
+
+2. Loss Calculation: After obtaining the predicted output y_pred​, the loss function computes the error (MSE) between the true value y_new and y_pred​.
+
+3. Backward Pass (Gradient Calculation): Backpropagation computes the gradients of the loss with respect to the weights. For the output layer:
+
+
+4. Weight Update: The weights are updated using gradient descent:
+
+
+where η is the learning rate. This update happens incrementally after each new data point.
+
+Steps and Coding for Dynamic Model Updating for Neural Networks
+
+Sigmoid, ReLU, and Their Derivatives:
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def sigmoid_derivative(z):
+    return sigmoid(z) * (1 - sigmoid(z))
+
+def relu(z):
+    return np.maximum(0, z)
+
+def relu_derivative(z):
+    return np.where(z > 0, 1, 0)
+2. Loss Function and Forward Pass:
+
+def loss(y, y_pred):
+    return 0.5 * np.mean((y - y_pred)**2)
+
+def forward_pass(x, W1, b1, W2, b2):
+    z1 = np.dot(W1, x) + b1
+    a1 = relu(z1)  # Use ReLU instead of sigmoid
+    z2 = np.dot(W2, a1) + b2
+    y_pred = z2  # Output layer without activation for regression tasks
+    return y_pred, z1, a1
+3. Backward Pass (Gradient Calculation):
+
+def backward_pass(x, y, y_pred, z1, a1, W2, learning_rate):
+    dz2 = y_pred - y  # Gradient of loss w.r.t. output (linear activation)
+    dW2 = np.dot(dz2, a1.T)
+    db2 = np.sum(dz2, axis=1, keepdims=True)
+
+    dz1 = np.dot(W2.T, dz2) * relu_derivative(z1)  # Use ReLU derivative
+    dW1 = np.dot(dz1, x.T)
+    db1 = np.sum(dz1, axis=1, keepdims=True)
+
+    return dW1, db1, dW2, db2
+4. Dynamic Weight Update:
+
+def update_weights(W1, b1, W2, b2, dW1, db1, dW2, db2, learning_rate):
+    W1 -= learning_rate * dW1
+    b1 -= learning_rate * db1
+    W2 -= learning_rate * dW2
+    b2 -= learning_rate * db2
+    return W1, b1, W2, b2
+5. Initial Model Training (Epochs):
+
+# Training the NN with initial data
+epochs = 1000
+for epoch in range(epochs):
+    # Forward pass
+    y_pred_train, z1_train, a1_train = forward_pass(X_train, W1, b1, W2, b2)
+    
+    # Calculate loss
+    train_loss = loss(y_train, y_pred_train)
+    
+    # Backward pass and update weights
+    dW1, db1, dW2, db2 = backward_pass(X_train, y_train, y_pred_train, z1_train, a1_train, W2, learning_rate)
+    W1, b1, W2, b2 = update_weights(W1, b1, W2, b2, dW1, db1, dW2, db2, learning_rate)
+    
+    # Print loss every 100 epochs
+    if (epoch + 1) % 100 == 0:
+        print(f'Epoch {epoch + 1}, Train Loss: {train_loss:.5f}')
+6. Dynamic Updating (Adding New Data Points):
+
+# Dynamic updating by adding one data point at a time
+best_error = initial_validation_error
+early_stopping_rounds = 3
+worse_count = 0
+
+for step in range(10):
+    # Add one older data point at a time
+    X_new = X_full_scaled[-110 - step].reshape(-1, 1)  # Single column for new data
+    y_new = np.array([[y_full_scaled[-110 - step]]])  # New true label
+
+    # Forward pass with new data
+    y_pred_new, z1_new, a1_new = forward_pass(X_new, W1, b1, W2, b2)
+    
+    # Backward pass with new data and update weights
+    dW1_new, db1_new, dW2_new, db2_new = backward_pass(X_new, y_new, y_pred_new, z1_new, a1_new, W2)
+    W1, b1, W2, b2 = update_weights(W1, b1, W2, b2, dW1_new, db1_new, dW2_new, db2_new, learning_rate)
+    
+    # Validation with updated model
+    y_pred_valid, _, _ = forward_pass(X_valid, W1, b1, W2, b2)
+    y_pred_valid_raw = scaler_y.inverse_transform(y_pred_valid.flatten().reshape(-1, 1))  # Reverse back to raw data scale
+    
+    new_validation_error = loss(y_valid_raw, y_pred_valid_raw)
+    
+    print(f"Step {step + 1}: Validation error after adding new data: {new_validation_error}")
+    
+    # Early stopping check
+    if new_validation_error < best_error:
+        best_error = new_validation_error
+        worse_count = 0
+    else:
+        worse_count += 1
+        if worse_count >= early_stopping_rounds:
+            print(f"Stopping early as validation error increased at step {step + 1}.")
+            break
+
+print(f"Best validation error (in raw data): {best_error}")
+Dynamic Updating: After the initial training, the code updates the model by adding data points at a time. This allows the model to continue learning using the parameters from the previous step.
+Backpropagation on New Data: After adding each new data point, the model makes predictions (forward pass) and then updates the weights (backward pass).
+Early Stopping: The model stops updating when the validation error stops improving, controlled by the early_stopping_rounds parameter.
+When adding new data to a Neural Network, we adjust the weights and biases incrementally using the gradients from the previous training step.
+
+Here is the result:
+
+
+In this experiment, I tried incremental updates for a neural network (NN) in time series forecasting. After 1,000 training epochs, the final loss was 0.02223, and the initial validation error was 9.9387. With dynamic updates, the validation error improved slightly at first (9.9112) but worsened in later steps, leading to early stopping.
+
+While the initial improvement shows the updates helped at first, I’m not entirely sure why the performance declined. It could be due to overfitting, a fixed learning rate, small data updates, or how the weights were initialized. I believe it’s worth exploring more in the future.
+
+Final Thoughts
+In this article, we’ve explored incremental learning techniques for dynamically updating time series forecasting models. We focused on examples like the Yule model and Neural Networks, showing how they can be updated as new data comes in.
+
+Remember, for time series forecasting, the main benefit of incremental learning isn’t reducing computational time but selecting the best training data interactively. By tracking the error with each new data point, the model adjusts to balance both recent and historical data, improving accuracy.
+
+If you’re interested in learning more, the use of a learning rate helps make updates smoother as data patterns change. This supports incremental learning, allowing the model to adapt to new data, which is useful for tracking trends over time.
+
+You can find the code and data on my GitHub: GitHub link
+
+About me
+With over 20 years of experience in software and database management and 25 years teaching IT, math, and statistics, I am a Data Scientist with extensive expertise across multiple industries.

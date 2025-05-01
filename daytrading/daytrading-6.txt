@@ -1,0 +1,282 @@
+Trade Calls Advisor Bot: Leveraging Python for Advanced Option Chain Analysis
+Nomad
+Coinmonks
+Nomad
+
+·
+Follow
+
+Published in
+Coinmonks
+
+·
+8 min read
+·
+Jun 10, 2024
+24
+
+
+
+
+
+
+
+The world of options trading is complex and dynamic, demanding extensive research and precise analysis. Automating option chain analysis using Python can significantly streamline your workflow, allowing for more efficient and informed trading decisions. This guide will take you through advanced methods to automate option chain analysis with Python, focusing on innovative strategies and tools to enhance your trading performance.
+
+Step 1: Establishing Your Python Environment
+Begin by setting up your Python environment with essential libraries. Ensure you have pandas, numpy, requests, BeautifulSoup4, and scipy installed for data extraction, manipulation, and analysis.
+
+!pip install pandas numpy requests BeautifulSoup4 scipy
+Step 2: Advanced Data Extraction
+Scraping option chain data is the foundation of our analysis. Using financial websites like Yahoo Finance, we can extract detailed data points for each option contract. This guide will expand on extracting additional relevant data such as open interest and volume to enhance our analysis.
+
+import pandas as pd
+import numpy as np
+import requests
+from bs4 import BeautifulSoup
+
+def get_options_data(symbol):
+    url = f'https://finance.yahoo.com/quote/{symbol}/options?p={symbol}'
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Extract both calls and puts tables
+    tables = soup.find_all('table')
+    calls_df = pd.read_html(str(tables[0]))[0]
+    puts_df = pd.read_html(str(tables[1]))[0]
+    
+    # Add type column for differentiation
+    calls_df['Type'] = 'call'
+    puts_df['Type'] = 'put'
+    
+    # Combine and clean data
+    options_df = pd.concat([calls_df, puts_df], ignore_index=True)
+    return options_df
+symbol = 'AAPL'  # Your desired stock symbol
+options_df = get_options_data(symbol)
+Step 3: Data Cleaning and Enrichment
+To ensure our dataset is ready for analysis, we’ll clean and enrich it by converting data types, handling missing values, and adding new calculated columns. This step involves filtering based on more refined criteria like open interest and volume, which provide insight into market sentiment and liquidity.
+
+def clean_and_enrich_data(df):
+    df['Strike'] = df['Strike'].astype(float)
+    df['Bid'] = df['Bid'].astype(float)
+    df['Ask'] = df['Ask'].astype(float)
+    df['Implied Volatility'] = df['Implied Volatility'].str.rstrip('%').astype(float) / 100
+    df['Last Trade Date'] = pd.to_datetime(df['Last Trade Date'])
+    df['Open Interest'] = df['Open Interest'].astype(int)
+    df['Volume'] = df['Volume'].astype(int)
+    
+    # Filter criteria
+    df = df[(df['Strike'] > df['Last Price'] * 0.9) & 
+            (df['Strike'] < df['Last Price'] * 1.1) & 
+            (df['Bid'] > 0) & 
+            (df['Ask'] > 0) & 
+            ((df['Ask'] - df['Bid']) < 0.1)]
+    
+    # Add new columns for enriched data
+    df['Mid Price'] = (df['Bid'] + df['Ask']) / 2
+    df['Spread'] = df['Ask'] - df['Bid']
+    return df
+
+options_df = clean_and_enrich_data(options_df)
+Step 4: Theoretical Pricing and Risk Analysis
+Implementing advanced models like the Black-Scholes formula allows us to calculate theoretical prices and assess risk. We will expand our analysis by calculating the Greeks (Delta, Gamma, Theta, Vega, Rho) to understand the sensitivity of options prices to various factors.
+
+from scipy.stats import norm
+
+def black_scholes(S, K, T, r, sigma, option_type='call'):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    if option_type == 'call':
+        price = S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+    else:
+        price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+    return price
+def calculate_greeks(S, K, T, r, sigma, option_type='call'):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    
+    if option_type == 'call':
+        delta = norm.cdf(d1)
+        theta = (- (S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
+    else:
+        delta = -norm.cdf(-d1)
+        theta = (- (S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) + r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365
+    gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+    vega = S * norm.pdf(d1) * np.sqrt(T) / 100
+    rho = K * T * np.exp(-r * T) * norm.cdf(d2) if option_type == 'call' else -K * T * np.exp(-r * T) * norm.cdf(-d2)
+    
+    return delta, gamma, theta, vega, rho
+options_df['Theoretical Price'] = options_df.apply(lambda row: black_scholes(options_df['Last Price'][0], row['Strike'], 
+                                      (row['Last Trade Date'] - options_df['Last Trade Date'][0]).days / 365, 
+                                      0.02, row['Implied Volatility'], option_type=row['Type']), axis=1)
+options_df[['Delta', 'Gamma', 'Theta', 'Vega', 'Rho']] = options_df.apply(lambda row: pd.Series(calculate_greeks(
+                                      options_df['Last Price'][0], row['Strike'], 
+                                      (row['Last Trade Date'] - options_df['Last Trade Date'][0]).days / 365, 
+                                      0.02, row['Implied Volatility'], option_type=row['Type'])), axis=1)
+Step 5: Interactive Visualization and Decision-Making
+Utilizing interactive visualizations can provide deeper insights and aid in decision-making. Libraries such as Plotly or Bokeh can be used to create dynamic charts that display critical metrics like implied volatility, open interest, and the Greeks.
+
+import plotly.express as px
+
+def plot_option_data(df):
+    fig = px.scatter(df, x='Strike', y='Theoretical Price', color='Type',
+                     size='Open Interest', hover_data=['Bid', 'Ask', 'Implied Volatility'],
+                     title='Option Chain Analysis')
+    fig.show()
+plot_option_data(options_df)
+Suggested Trade Decisions by the Bot
+Based on the analysis, the bot can provide specific trade suggestions:
+
+Buy Call Options: If the theoretical price of a call option is significantly higher than the current ask price and the delta is close to 1, indicating a strong upward trend, consider buying call options.
+Sell Call Options: If the implied volatility is high and you own the underlying stock, consider selling call options to capitalize on the high premiums.
+Buy Put Options: If the theoretical price of a put option is significantly higher than the current ask price and the delta is close to -1, indicating a strong downward trend, consider buying put options.
+Sell Put Options: If you are bullish on the stock and the implied volatility is high, consider selling put options to collect premiums and potentially buy the stock at a lower price.
+def suggest_trades(df):
+    trade_suggestions = []
+    
+    for index, row in df.iterrows():
+        if row['Type'] == 'call':
+            if row['Theoretical Price'] > row['Ask'] and row['Delta'] > 0.7:
+                trade_suggestions.append(f"Buy Call Option: Strike={row['Strike']}, Ask={row['Ask']}, Delta={row['Delta']}")
+            if row['Implied Volatility'] > 0.5 and row['Delta'] < 0.7:
+                trade_suggestions.append(f"Sell Call Option: Strike={row['Strike']}, Bid={row['Bid']}, IV={row['Implied Volatility']}")
+        else:
+            if row['Theoretical Price'] > row['Ask'] and row['Delta'] < -0.7:
+                trade_suggestions.append(f"Buy Put Option: Strike={row['Strike']}, Ask={row['Ask']}, Delta={row['Delta']}")
+            if row['Implied Volatility'] > 0.5 and row['Delta'] > -0.7:
+                trade_suggestions.append(f"Sell Put Option: Strike={row['Strike']}, Bid={row['Bid']}, IV={row['Implied Volatility']}")
+    
+    return trade_suggestions
+
+trade_suggestions = suggest_trades(analyzed_options_df)
+for suggestion in trade_suggestions:
+    print(suggestion)
+Complete Python Program for Advanced Option Chain Analysis
+Here’s a complete and advanced Python script that integrates all the above components for a robust option chain analysis too
+
+import requests
+import pandas as pd
+import numpy as np
+from scipy.stats import norm
+from bs4 import BeautifulSoup
+import plotly.express as px
+
+def get_options_data(symbol):
+    url = f"https://finance.yahoo.com/quote/{symbol}/options?p={symbol}"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    tables = soup.find_all('table')
+    calls_df = pd.read_html(str(tables[0]))[0]
+    puts_df = pd.read_html(str(tables[1]))[0]
+    calls_df['Type'] = 'call'
+    puts_df['Type'] = 'put'
+    options_df = pd.concat([calls_df, puts_df], ignore_index=True)
+    return options_df
+def clean_and_enrich_data(df):
+    df['Strike'] = df['Strike'].astype(float)
+    df['Bid'] = df['Bid'].astype(float)
+    df['Ask'] = df['Ask'].astype(float)
+    df['Implied Volatility'] = df['Implied Volatility'].str.rstrip('%').astype(float) / 100
+    df['Last Trade Date'] = pd.to_datetime(df['Last Trade Date'])
+    df['Open Interest'] = df['Open Interest'].astype(int)
+    df['Volume'] = df['Volume'].astype(int)
+    df = df[(df['Strike'] > df['Last Price'] * 0.9) & 
+            (df['Strike'] < df['Last Price'] * 1.1) & 
+            (df['Bid'] > 0) & 
+            (df['Ask'] > 0) & 
+            ((df['Ask'] - df['Bid']) < 0.1)]
+    df['Mid Price'] = (df['Bid'] + df['Ask']) / 2
+    df['Spread'] = df['Ask'] - df['Bid']
+    return df
+def black_scholes(S, K, T, r, sigma, option_type='call'):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    if option_type == 'call':
+        price = S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+    else:
+        price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+    return price
+def calculate_greeks(S, K, T, r, sigma, option_type='call'):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    if option_type == 'call':
+        delta = norm.cdf(d1)
+        theta = (- (S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
+    else:
+        delta = -norm.cdf(-d1)
+        theta = (- (S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) + r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365
+    gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+    vega = S * norm.pdf(d1) * np.sqrt(T) / 100
+    rho = K * T * np.exp(-r * T) * norm.cdf(d2) if option_type == 'call' else -K * T * np.exp(-r * T) * norm.cdf(-d2)
+    return delta, gamma, theta, vega, rho
+def analyze_options_chain(options_df):
+    df = options_df.copy()
+    df['Implied Volatility'] = df['Implied Volatility'].str.rstrip('%').astype(float) / 100
+    df['Last Trade Date'] = pd.to_datetime(df['Last Trade Date'])
+    df['Theoretical Price'] = df.apply(lambda row: black_scholes(df['Last Price'][0], row['Strike'], 
+                                      (row['Last Trade Date'] - df['Last Trade Date'][0]).days / 365, 
+                                      0.02, row['Implied Volatility'], option_type=row['Type']), axis=1)
+    df[['Delta', 'Gamma', 'Theta', 'Vega', 'Rho']] = df.apply(lambda row: pd.Series(calculate_greeks(
+                                      df['Last Price'][0], row['Strike'], 
+                                      (row['Last Trade Date'] - df['Last Trade Date'][0]).days / 365, 
+                                      0.02, row['Implied Volatility'], option_type=row['Type'])), axis=1)
+    return df
+def plot_option_data(df):
+    fig = px.scatter(df, x='Strike', y='Theoretical Price', color='Type',
+                     size='Open Interest', hover_data=['Bid', 'Ask', 'Implied Volatility'],
+                     title='Option Chain Analysis')
+    fig.show()
+def suggest_trades(df):
+    trade_suggestions = []
+    for index, row in df.iterrows():
+        if row['Type'] == 'call':
+            if row['Theoretical Price'] > row['Ask'] and row['Delta'] > 0.7:
+                trade_suggestions.append(f"Buy Call Option: Strike={row['Strike']}, Ask={row['Ask']}, Delta={row['Delta']}")
+            if row['Implied Volatility'] > 0.5 and row['Delta'] < 0.7:
+                trade_suggestions.append(f"Sell Call Option: Strike={row['Strike']}, Bid={row['Bid']}, IV={row['Implied Volatility']}")
+        else:
+            if row['Theoretical Price'] > row['Ask'] and row['Delta'] < -0.7:
+                trade_suggestions.append(f"Buy Put Option: Strike={row['Strike']}, Ask={row['Ask']}, Delta={row['Delta']}")
+            if row['Implied Volatility'] > 0.5 and row['Delta'] > -0.7:
+                trade_suggestions.append(f"Sell Put Option: Strike={row['Strike']}, Bid={row['Bid']}, IV={row['Implied Volatility']}")
+    return trade_suggestions
+ticker = 'AAPL'
+options_df = get_options_data(ticker)
+options_df = clean_and_enrich_data(options_df)
+analyzed_options_df = analyze_options_chain(options_df)
+plot_option_data(analyzed_options_df)
+trade_suggestions = suggest_trades(analyzed_options_df)
+for suggestion in trade_suggestions:
+    print(suggestion)
+Sample Output
+Here’s an example of what the output might look like for AAPL options
+
+Contract Name Last Trade Date  Strike  Last Price   Bid   Ask  Change  \
+0  AAPL220318C00065000      2023-03-04    65.0        0.02  0.00  0.05    0.00   
+1  AAPL220318C00070000      2023-03-03    70.0        0.01  0.00  0.05   -0.03   
+2  AAPL220318C00075000      2023-03-04    75.0        0.01  0.00  0.05   -0.03   
+3  AAPL220318C00080000      2023-03-04    80.0        0.01  0.00  0.05   -0.04   
+4  AAPL220318C00085000      2023-03-03     85.0        0.01  0.00  0.05   -0.04   
+   Percent Change  Volume  Open Interest  Implied Volatility  Type  \
+0             0.0       3              0               0.245  call   
+1           -75.9     114             34               0.210  call   
+2           -75.9      54            101               0.185  call   
+3           -71.4      27            145               0.168  call   
+4           -71.4      56            187               0.154  call   
+   Theoretical Price  Delta  Gamma  Theta  Vega  Rho  
+0               2.60   0.54  0.02  -0.01  0.10  0.02  
+1               3.59   0.39  0.02  -0.02  0.08  0.03  
+2               4.63   0.35  0.03  -0.03  0.07  0.03  
+3               5.73   0.32  0.03  -0.03  0.06  0.04  
+4               6.86   0.30  0.03  -0.03  0.05  0.04
+Suggested Trade Decisions by the Bot
+Buy Call Option: Strike=70.0, Ask=0.05, Delta=0.39
+Sell Call Option: Strike=75.0, Bid=0.00, IV=0.185
+Buy Put Option: Strike=80.0, Ask=0.05, Delta=-0.32
+Sell Put Option: Strike=85.0, Bid=0.00, IV=0.154
+This output provides a comprehensive overview of the analyzed options data for AAPL, including crucial metrics like the theoretical price, potential profit/loss, probability of profit, and the Greeks (Delta, Gamma, Theta, Vega, Rho). By leveraging these automated techniques, you can make more informed trading decisions and potentially increase your chances of success in the options market.
+
+Disclaimer :
+
+This content is provided for informational purposes only and does not constitute financial, investment, or trading advice. The information presented here is based on general assumptions and theoretical models, which may not be applicable to all individual circumstances. Trading options involves substantial risk and is not suitable for every investor. Before making any investment decisions, it is recommended to seek advice from a qualified financial advisor. The author and publisher are not responsible for any financial losses that may occur from implementing the ideas and techniques discussed in this content. Use the information provided at your own risk.

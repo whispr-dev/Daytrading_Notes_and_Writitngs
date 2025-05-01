@@ -1,0 +1,179 @@
+🧭 Section 7: Trend Classification Showdown — 6 Models, 1 Truth
+✦ Why Classify Market Trends?
+Sometimes you don’t want to predict exact prices — just:
+
+“Are we in an uptrend, downtrend, or sideways chop?”
+
+Trend classification lets you:
+
+Filter out low-quality trades
+
+Adjust strategy (e.g., trend-following vs mean reversion)
+
+Build regime-switching logic into your bot
+
+✦ Labels We’ll Use
+Let’s simplify the trend universe:
+
+
+Label	Trend
+1	Uptrend
+0	Sideways/Flat
+-1	Downtrend
+We’ll label historical data using:
+
+Moving average slope (10 vs 30)
+
+Z-score of recent returns
+
+🧪 Labeling the Data
+📄 classifiers/generate_trend_labels.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+import numpy as np
+
+df = yf.download("MSFT", start="2020-01-01", end="2024-01-01")
+df['MA10'] = df['Adj Close'].rolling(10).mean()
+df['MA30'] = df['Adj Close'].rolling(30).mean()
+
+# Define trend label
+def classify_trend(row):
+    slope = row['MA10'] - row['MA30']
+    if slope > 1.0:
+        return 1    # uptrend
+    elif slope < -1.0:
+        return -1   # downtrend
+    else:
+        return 0    # flat
+
+df['Trend'] = df.apply(classify_trend, axis=1)
+df.dropna(inplace=True)
+✦ Models in the Arena
+We’ll test six types of trend classifiers:
+
+Logistic Regression
+
+Random Forest
+
+Support Vector Machine (SVM)
+
+XGBoost
+
+1D Convolutional Neural Network
+
+LSTM Recurrent Neural Network
+
+📄 Features for Classification
+Same engineered features we used in the XGBoost section:
+
+Lagged returns
+
+Rolling std dev (volatility)
+
+RSI
+
+MACD histogram
+
+Amihud
+
+📄 classifiers/features.py (can be reused from earlier section)
+
+📄 Unified Benchmarking Script
+📄 classifiers/trend_classifier_battle.py
+
+python
+Copy
+Edit
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+# Load preprocessed DataFrame with Trend labels + features
+df = pd.read_csv("trend_labeled_data.csv")
+features = ['Lag1', 'Lag2', 'STD5', 'RSI', 'MACD_hist', 'Amihud']
+X = df[features]
+y = df['Trend']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
+
+models = {
+    'LogReg': LogisticRegression(max_iter=1000),
+    'RandomForest': RandomForestClassifier(n_estimators=100),
+    'SVM': SVC(),
+    'XGBoost': XGBClassifier()
+}
+
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    print(f"\n{name} Accuracy: {accuracy_score(y_test, preds):.2%}")
+    print(classification_report(y_test, preds, digits=3))
+✨ Deep Models: CNN and LSTM
+To add CNN and LSTM, you’d:
+
+Transform X to 3D tensors [samples, timesteps, features]
+
+Use PyTorch or Keras
+
+Treat it like time-series classification
+
+We can build those next if you want full deep learning head-to-head!
+
+📈 Visualize Trend Map
+📄 classifiers/plot_trend_map.py
+
+python
+Copy
+Edit
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(14, 5))
+plt.plot(df['Adj Close'], label="Price")
+plt.scatter(df.index[df['Trend'] == 1], df['Adj Close'][df['Trend'] == 1], color='green', label='Uptrend')
+plt.scatter(df.index[df['Trend'] == -1], df['Adj Close'][df['Trend'] == -1], color='red', label='Downtrend')
+plt.title("Trend Classification Map")
+plt.legend()
+plt.tight_layout()
+plt.show()
+🧠 Which Model Wins?
+Based on prior tests and the documents you provided:
+
+Random Forest: excellent baseline, interpretable
+
+XGBoost: best overall in noisy data
+
+CNN/LSTM: edge cases where temporal features dominate
+
+✦ What Can You Do With This?
+Filter trades: Only act when trend = 1 or -1
+
+Route strategies:
+
+Uptrend → momentum scalper
+
+Flat → fade mean reversion
+
+Downtrend → defensive
+
+This is regime logic — the core of adaptable bots.
+
+✦ Coming Up Next: Stacked LSTM Model
+In Section 8, we’ll:
+
+Build a stacked LSTM model for predicting future returns
+
+Train on multivariate features
+
+Compare it to our XGBoost results
+
+Plot forecast vs real price movement
+
+This is neural temporal forecasting done right.

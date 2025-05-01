@@ -1,0 +1,115 @@
+Extended Daytrading with Python
+Advanced Tools, Patterns, and Forecasting Techniques
+Chapter 1: Introduction – Beyond the Technicals
+In Further Daytrading with Python, we explored how to build intelligent, model-driven strategies using neural nets, anomaly detection, and live dashboards.
+
+In this volume, we venture deeper into the macro-structural, probabilistic, and statistical foundations of modern quant trading — while still keeping our boots firmly on the ground with real Python code and market-tested tools.
+
+Here’s what you’ll master in this book:
+
+Building stationary series pipelines for robust forecasting
+
+Using Monte Carlo simulations to assess strategy risk
+
+Implementing real-time candlestick pattern scanning
+
+Classifying market regimes with PCA and KMeans
+
+Running backtests using vectorbt with full parameter sweeps
+
+Enhancing models with macroeconomic indicators from FRED
+
+Automating support/resistance detection with 7 algorithmic methods
+
+Using triple-barrier labeling for more accurate supervised learning targets
+
+No fluff, no vague theory — everything in this book is a real tool you can code, test, and deploy.
+
+Let’s start by fixing something that quietly breaks many models: non-stationary data.
+
+Chapter 2: Making Time Series Stationary – The Forgotten Step
+Before you throw your data into XGBoost, PatchTST, or even a simple LSTM — there’s one critical thing to check:
+
+Is your time series stationary?
+
+📉 Why Stationarity Matters
+A stationary series has constant mean and variance over time. Many ML and statistical models — especially ones with assumptions like normality, autocorrelation, or linearity — break silently on non-stationary data.
+
+It’s like trying to measure a moving target with a fixed ruler.
+
+Take SPY’s closing prices:
+
+python
+Copy
+Edit
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+spy = yf.Ticker("SPY")
+data = spy.history(period="10y")
+
+plt.plot(data.index, data['Close'])
+plt.title('SPY Price - Non-Stationary')
+The chart trends up — clearly non-stationary. But if we take returns, the mean and variance stabilize:
+
+python
+Copy
+Edit
+returns = data['Close'].pct_change().dropna()
+plt.plot(returns)
+plt.title('SPY Returns - Stationary')
+🧪 The ADF Test (Augmented Dickey-Fuller)
+Use this to verify stationarity statistically:
+
+python
+Copy
+Edit
+from statsmodels.tsa.stattools import adfuller
+
+def get_p_value(series):
+    result = adfuller(series.dropna(), autolag='AIC')
+    return result[1]
+
+print("P-value for SPY price:", get_p_value(data['Close']))
+print("P-value for returns:", get_p_value(returns))
+If p < 0.05, the series is likely stationary.
+
+🔄 Making Any Series Stationary
+Here’s a transformer-style pipeline:
+
+stationarize.py
+python
+Copy
+Edit
+def make_stationary(df, col='y'):
+    df['pct_change'] = df[col].pct_change()
+    df['log_diff'] = np.log(df[col]) - np.log(df[col].shift(1))
+    df['zscore'] = (df['pct_change'] - df['pct_change'].mean()) / df['pct_change'].std()
+    return df.dropna()
+Use .pct_change() or .log_diff() for most price/volume series. Standardize (zscore) if needed for ML.
+
+⚡ PatchTST: Proof in Prediction
+From [71†source], two identical PatchTST models were trained — one on raw prices, one on returns.
+
+Same horizon, hyperparams, architecture
+
+Stationary input → 20%+ lower RMSE
+
+Non-stationary model lagged on reversals and spiked errors in trends
+
+Conclusion: even modern Transformers benefit from clean input.
+
+🔧 Advanced Tip: Auto-Stationarization in Pipeline
+Build a wrapper that auto-checks and transforms input:
+
+python
+Copy
+Edit
+def auto_stationarize(series):
+    if get_p_value(series) > 0.05:
+        return series.pct_change().dropna()
+    return series
+Use it during feature engineering to future-proof your models.
+
+🧠 Coming Up…
+Now that you’ve built clean input pipelines, let’s add macro intelligence. In the next chapter, we’ll fetch macroeconomic indicators from FRED and integrate them as exogenous variables — enabling true regime-aware modeling.

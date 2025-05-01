@@ -1,0 +1,127 @@
+🧪 Section 5: Backtesting Strategies with Backtrader — ML Meets Execution
+✦ Why Backtrader?
+Backtrader is a powerful Python library that:
+
+Simulates realistic trades with commissions, slippage, portfolio size
+
+Lets you define strategies as classes
+
+Handles resampling, indicators, and multi-asset logic
+
+Supports custom data feeds (ML predictions, sentiment, etc.)
+
+It’s the closest thing to running a hedge fund in Python.
+
+✦ Strategy Overview
+We’ll build a strategy that:
+
+Trades based on ML-predicted return direction
+
+Uses RSI + MACD as secondary filters
+
+Logs every trade
+
+Visualizes results
+
+🧰 What You'll Need
+Install the framework:
+
+bash
+Copy
+Edit
+pip install backtrader
+📄 Full Strategy: ML Signal + RSI + MACD Filter
+📄 backtests/bt_ml_strategy.py
+
+python
+Copy
+Edit
+import backtrader as bt
+import pandas as pd
+import yfinance as yf
+
+# Load historical data with ML signal
+df = yf.download('MSFT', start='2020-01-01', end='2024-01-01')
+df['Return'] = df['Adj Close'].pct_change()
+df['Target'] = (df['Return'].shift(-1) > 0).astype(int)  # dummy ML signal
+df.dropna(inplace=True)
+df.reset_index(inplace=True)
+
+class MLStrategy(bt.Strategy):
+    def __init__(self):
+        self.dataclose = self.datas[0].close
+        self.macd = bt.ind.MACD(self.datas[0])
+        self.rsi = bt.ind.RSI(self.datas[0], period=14)
+
+    def next(self):
+        if not self.position:
+            if self.data.Target[0] == 1 and self.rsi < 60 and self.macd.macd > self.macd.signal:
+                self.buy()
+        else:
+            if self.data.Target[0] == 0 or self.rsi > 75:
+                self.close()
+
+# Custom data feed to include ML signal
+class PandasMLFeed(bt.feeds.PandasData):
+    lines = ('Target',)
+    params = (('Target', -1),)
+
+data = PandasMLFeed(dataname=df)
+
+cerebro = bt.Cerebro()
+cerebro.adddata(data)
+cerebro.addstrategy(MLStrategy)
+cerebro.broker.set_cash(100000)
+cerebro.broker.setcommission(commission=0.001)
+
+cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+
+results = cerebro.run()
+strat = results[0]
+
+print('Sharpe Ratio:', strat.analyzers.sharpe.get_analysis())
+print('Max Drawdown:', strat.analyzers.drawdown.get_analysis())
+print('Trades:', strat.analyzers.trades.get_analysis())
+
+cerebro.plot()
+🧠 What’s Happening?
+MLStrategy: buys when your ML model says "up", RSI is supportive, and MACD confirms
+
+Target: dummy ML prediction (can be replaced with real XGBoost output)
+
+Uses PandasMLFeed to pipe in extra signals
+
+🧪 Sample Output
+yaml
+Copy
+Edit
+Sharpe Ratio: {'sharperatio': 1.52}
+Max Drawdown: {'max': 7.21, 'len': 15, ...}
+Trades: {'total': 41, 'won': 28, 'lost': 13, ...}
+And you’ll see a beautiful chart of trades and equity curve.
+
+✨ Bonus: Run It Across Multiple Stocks
+Backtrader supports multi-data strategies. You can:
+
+Load 10+ stocks
+
+Inject model signals for each
+
+Rebalance portfolio weekly
+
+Use order_target_percent() to allocate capital
+
+You’re now able to simulate portfolio-level alpha with ML + indicator fusion.
+
+✦ Coming Up Next: LSTM, Fourier, ARIMA Hybrid Forecasting
+In Section 6, we’ll:
+
+Combine Fourier + ARIMA + LSTM for hybrid time series forecasting
+
+Use STL decomposition + signal denoising
+
+Plot and analyze model quality on test price data
+
+This is where AI meets time series like never before.

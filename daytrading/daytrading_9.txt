@@ -1,0 +1,126 @@
+14 pandas tricks you MUST know
+JYOTI PRAKASH DEY
+JYOTI PRAKASH DEY
+
+·
+Follow
+
+7 min read
+·
+Aug 13, 2024
+377
+
+
+9
+
+
+
+
+
+
+I’ve been using Python for almost 3 years now and the one thing that attracts me is the robustness.. In this blog, I will be sharing a bunch of Pandas scripts that I use daily, which have increased my performance.
+
+Imagine you’re tasked with understanding a massive dataset — millions of rows of financial transactions, patient records, or social media interactions. How would you approach this? Would traditional spreadsheets suffice, or do you need something more robust, flexible, and intuitive?
+
+Pandas, an open-source Python library, is designed to make complex data analysis tasks accessible and efficient. It allows you to structure, analyze, and visualize your data in ways that would be cumbersome or impossible with basic tools. Whether you’re reshaping datasets, filling in missing values, or performing statistical analysis, Pandas offers a wide array of functions that can transform your data exploration process.
+
+But what sets Pandas apart? It’s not just the speed or the ease of use — it’s the way it encourages you to think about data. Pandas turns abstract concepts like dataframes and series into tangible, manipulable objects, allowing you to focus on asking the right questions rather than getting bogged down in the mechanics of data handling. It’s a library that’s as much about discovery as it is about execution.
+
+With Pandas, you won’t just be processing data — you’ll be extracting insights, making predictions, and perhaps even questioning the data itself. What patterns are hidden in the noise? How can you reshape the data to uncover new perspectives? With Pandas, these questions become not just possible to explore but enjoyable to answer.
+
+Here are the 14 Pandas tricks and their use cases:
+
+#FIRST IMPORT PANDAS AND LOAD YOUR DATA 
+import pandas as pd
+df=pd.read_csv("YOUR FILE PATH")
+1. Selecting Columns by Data Type
+This feature allows you to filter and select columns from a DataFrame based on their data types, such as integers (int64), floating-point numbers (float64), or strings (object). This can be particularly useful when you want to apply specific operations only to numerical columns or exclude categorical data.
+
+Use Case: If you’re performing statistical analysis and need to isolate only the numerical columns, or if you’re preparing data for machine learning models that require numerical input, this method quickly narrows down the relevant columns.
+
+df.select_dtypes(include=['float64', 'int64'])
+2. Conditional Filtering with query
+The query method provides a more readable and concise way to filter rows in a DataFrame based on conditions. Unlike traditional boolean indexing, query allows you to write conditions in a string format that can include logical operators and column names, making the code more intuitive.
+
+Use Case: This is useful when you need to filter data based on multiple conditions, such as selecting rows where the age is greater than 25 and the city is "Mumbai." It simplifies complex filtering operations and improves code readability.
+
+df.query('age > 25 & city == "Mumbai"')
+3. Chaining Operations with pipe
+The pipe method allows you to apply a function or a sequence of functions to a DataFrame in a chained manner. This is particularly useful for maintaining a clean and readable codebase when performing multiple transformations. Instead of breaking down each step into separate lines of code, you can chain them together, enhancing readability and flow.
+
+Use Case: When you're normalizing data, cleaning up columns, or applying multiple transformations in a specific order, pipe helps keep the sequence of operations clear and maintainable.
+
+def normalize(df):
+    return (df - df.mean()) / df.std()
+
+df.pipe(normalize)
+4. Exploding a List-Like Column
+The explode function takes a column that contains lists and expands each element of the lists into separate rows, aligning the rest of the DataFrame accordingly. This method is useful when you have nested data within a column and need to perform analysis at a more granular level.
+
+Use Case: Suppose you have a DataFrame where one column contains lists of tags or categories associated with each record. By exploding this column, you can create a row for each tag or category, making it easier to count, group, or analyze them separately.
+
+df.explode('column_with_lists')
+5. Using applymap for Element-Wise Operations
+The applymap method allows you to apply a function to each element of a DataFrame. This is useful when you need to perform element-wise operations across an entire DataFrame, such as formatting, type conversion, or custom computations.
+
+Use Case: If you need to calculate the length of each string in a DataFrame or apply a specific transformation to every element, applymap lets you do this efficiently. For example, converting all elements to their string length or formatting numbers.
+
+df.applymap(lambda x: len(str(x)) if isinstance(x, str) else x)
+6. Creating New Columns with assign
+The assign method is a powerful tool for creating new columns in a DataFrame based on existing ones. It allows you to add one or more columns at a time, all while maintaining the original DataFrame. The new columns can be the result of operations on existing columns, such as arithmetic or string concatenation.
+
+Use Case: If you need to calculate a new metric, such as total cost by multiplying price and quantity columns, assign provides a clean and efficient way to add this new information to your DataFrame.
+
+df.assign(total_cost=lambda x: x['price'] * x['quantity'])
+7. Using cut to Bin Data
+The cut function is used to segment and sort data values into bins or intervals. This is particularly useful when you want to categorize a continuous variable into discrete intervals, such as age groups, income brackets, or score ranges.
+
+Use Case: Suppose you have a dataset of ages and want to categorize individuals into age groups like 'Teen', 'Young Adult', 'Adult', and 'Senior'. cut allows you to define these categories and automatically assign each data point to its corresponding bin.
+
+df['age_group'] = pd.cut(df['age'], bins=[0, 18, 35, 60, 100], labels=['Teen', 'Young Adult', 'Adult', 'Senior'])
+8. Memory Optimization with astype
+The astype method allows you to change the data type of a column in a DataFrame. This can be used to optimize memory usage by converting columns to more efficient types, such as converting integers to int32 or categoricals to the category type.
+
+Use Case: If you're working with a large dataset and need to reduce its memory footprint, converting categorical data to the category type or converting large integers to smaller integer types can save significant amounts of memory.
+
+df['category_column'] = df['category_column'].astype('category')
+9. Forward and Backward Filling Missing Data
+Forward fill (ffill) and backward fill (bfill) are methods used to propagate the last valid observation forward or the next valid observation backward to fill missing values. These methods are useful when dealing with time series data or datasets where missing values need to be filled based on surrounding data points.
+
+Use Case: In time series data, if you have missing values in a sequence and you want to fill them with the last known value (e.g., carrying forward the last stock price), ffill and bfill provide a simple and effective solution.
+
+df.ffill()  # Forward fill
+df.bfill()  # Backward fill
+10. Working with MultiIndexes
+MultiIndexing in Pandas allows you to use multiple levels of indexing for rows and columns, enabling more complex data structures. This is particularly useful for hierarchical data, where you need to organize and access data at different levels of granularity.
+
+Use Case: If you’re dealing with data that has multiple layers of categorization, like sales data organized by region and then by product, using a MultiIndex allows you to slice and dice the data in powerful ways.
+
+df.set_index(['col1', 'col2'], inplace=True)
+df.loc[('value1', 'value2')]
+11. Aggregating Data with groupby and agg
+The groupby function groups data by one or more columns and then allows you to apply aggregation functions like sum, mean, or custom functions. The agg method provides flexibility by allowing you to apply multiple aggregation functions to different columns simultaneously.
+
+Use Case: When you need to calculate summary statistics for different groups within your data, such as finding the average price and total quantity sold per product category, groupbyand agg provide a structured and efficient way to do so.
+
+df.groupby('category').agg({'price': ['mean', 'sum'], 'quantity': 'sum'})
+12. Reshaping Data with melt
+The melt function transforms a DataFrame from a wide format to a long format. It’s particularly useful when you have multiple columns representing similar data points and want to condense them into a single column with corresponding values.
+
+Use Case: Suppose you have monthly sales data for different products spread across multiple columns. melt can be used to convert these columns into a single 'Month' column, making the DataFrame longer and easier to work with for analysis.
+
+pd.melt(df, id_vars=['id'], value_vars=['A', 'B'], var_name='variable', value_name='value')
+13. Pivoting DataFrames
+The pivot function reshapes data by converting unique values from one column into new columns, with another column's values filling the new table. This is essentially the opposite of melt and is useful for summarizing and restructuring data.
+
+Use Case: If you have data in a long format, such as sales figures for different products and dates, and you want to create a table where each product has its own column and each row represents a date, pivot is the way to go.
+
+df.pivot(index='date', columns='product', values='sales')
+14. Using sample for Random Sampling
+The sample function allows you to randomly select a fraction or a specific number of rows from a DataFrame. This can be useful for creating test datasets, performing Monte Carlo simulations, or simply getting a quick overview of your data.
+
+Use Case: When you have a large dataset and want to quickly explore a subset of the data without loading the entire dataset, or when you need to create a training sample for machine learning.
+
+# Select 10% of the data randomly to explore a subset of a large dataset
+sampled_df = df.sample(frac=0.1, random_state=42)
+Scrolled all the way? Would love to know your opinion on this blog, leave a small comment if you can.

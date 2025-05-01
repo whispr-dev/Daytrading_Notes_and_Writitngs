@@ -1,0 +1,159 @@
+Stock Picking with Magic Formula using Python
+Manish Peshwani
+InsiderFinance Wire
+Manish Peshwani
+
+·
+Follow
+
+Published in
+InsiderFinance Wire
+
+·
+6 min read
+·
+Aug 23, 2024
+211
+
+
+1
+
+
+
+
+
+Understanding Joel Greenblatt’s Magic Formula Strategy
+
+Introduction
+Joel Greenblatt, a prominent investor, hedge fund manager, and professor, introduced the investment community to a unique and straightforward strategy known as the “Magic Formula” in his book “The Little Book That Still Beats the Market”. This formula, designed to simplify the process of identifying good companies at bargain prices, has garnered significant attention for its effectiveness and ease of application. In this article, we will explore the principles behind Greenblatt’s Magic Formula, how it works, and its potential benefits and limitations.
+
+
+Image created by DALL.E
+The Core Principles of the Magic Formula
+The Magic Formula is based on two key financial metrics that Greenblatt believes are crucial for identifying undervalued companies with strong potential for growth:
+
+Earnings Yield (EY): This is calculated as the inverse of the Price-to-Earnings (P/E) ratio, which is the company’s earnings per share (EPS) divided by its stock price. It measures how much a company earns relative to its price, indicating how cheap or expensive the stock is. A higher earnings yield suggests that a company is undervalued.
+Return on Capital (ROC): This measures how efficiently a company generates profits from its capital. It is calculated by dividing a company’s operating income by its capital employed (which is the sum of equity and debt minus cash). A high ROC indicates that the company is using its capital effectively to generate profits.
+The Magic Formula ranks companies based on these two metrics, seeking to identify those with high earnings yields and high returns on capital. By focusing on these metrics, the formula aims to find good companies (those with high ROC) that are selling at bargain prices (those with high EY).
+
+How the Magic Formula Works
+The process of implementing the Magic Formula is relatively simple and involves the following steps:
+
+Identify a Universe of Stocks: The formula typically applies to companies with a market capitalization above a certain threshold, excluding financials and utilities, which have unique capital structures.
+Rank the Companies: Each company in the universe is ranked separately based on its earnings yield and return on capital. The company with the highest earnings yield receives a rank of 1, as does the company with the highest return on capital.
+Combine the Ranks: The ranks from the two metrics are then summed for each company. The companies with the lowest combined rank (i.e., the best ranks in both categories) are considered the most attractive investment opportunities.
+Build a Portfolio: The investor selects a predetermined number of top-ranked companies (usually 20–30) and allocates equal amounts of capital to each stock.
+Rebalance Annually: The portfolio is rebalanced once a year, with new stocks selected according to the Magic Formula criteria.
+Benefits of the Magic Formula
+Simplicity: One of the biggest advantages of the Magic Formula is its simplicity. Investors do not need to perform complex financial analyses or possess deep industry knowledge to apply the strategy.
+Proven Track Record: Greenblatt has demonstrated the effectiveness of the Magic Formula through backtesting and real-world application. Over the long term, the strategy has shown the potential to outperform the broader market.
+Disciplined Approach: The formula encourages a disciplined, systematic approach to investing, reducing emotional decision-making and the tendency to chase short-term market trends.
+Limitations and Considerations
+Market Volatility: Like any investment strategy, the Magic Formula is not immune to market volatility. There may be periods where the strategy underperforms, particularly in short-term horizons.
+Exclusion of Certain Sectors: The formula excludes financials and utilities, which means investors might miss opportunities in these sectors.
+Implementation Challenges: While the formula is simple in theory, practical challenges such as portfolio rebalancing costs, taxes, and the emotional difficulty of sticking to the strategy during underperformance periods can affect results.
+Lack of Qualitative Analysis: The Magic Formula relies purely on quantitative metrics, potentially overlooking qualitative factors such as management quality, competitive advantages, and industry trends.
+Python Implementation
+Now that we have understood the details of how this magic formula works, lets see how we can implement the steps of this strategy in python.
+
+Step 1 — Import the required libraries
+#Import the required libraries
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+Step 2 — Select the universe of stocks for the strategy and load the historical data.
+Here I have taken the NIFTY TOTAL INDEX as my stock universe. This index has 750 stocks, which covers a wide breadth of companies listed in Indian Market. You can download the total universe list from NSE site.
+
+You can choose the universe of stocks based of the market that you want to invest in. Just make sure that you exclude utilities and financial services companies from the universe. Since I invest in Indian market, I have chosen the nifty total index for my analysis.
+
+# Download the nifty total market ticker list from NSE site and load it in a dataframe
+df = pd.read_csv('ind_niftytotalmarket_list.csv')
+
+# Remove financial services stocks from the list
+df = df[df['Industry'] != 'Financial Services']
+
+# Compute yahoo symbols for each of the ticker symbol
+df['Yahoo Symbol'] = df['Symbol'] + '.NS'
+
+# Load the historical data for all the ticker symbols
+universe = set(df['Yahoo Symbol'].values)
+df = yf.download(universe, start='2023-06-02')
+Step 3 — Calculate the Earnings Yield and ROC for each of the stock in the universe of stocks
+Yahoo finance might not have the fundamental data for some of the companies, those will get errored out, but for majority of the companies we will be able to calculate the Earnings Yield and ROC.
+
+stocks_with_ratios = pd.DataFrame()
+
+# Iterate through each of the ticker symbol and using yahoo finance APIs, get the fundamentals of each 
+# ticker and compute the Earnings Yield and ROCE of each stock and gather this data in a dataframe
+for stock in universe:
+    ticker = yf.Ticker(stock)
+    balance = ticker.get_balance_sheet()
+    income_stmt = ticker.income_stmt
+    cf = ticker.get_cashflow()
+    info = ticker.get_info()
+    
+    try:
+        total_capital = balance.loc['TotalCapitalization'].values[0]
+        sector = info['sector']
+        
+        ebit = income_stmt.loc['EBIT'].iloc[0]
+
+        # Return on Capital Employed (ROC)
+        roce = ebit/total_capital
+
+        marketcap = info['marketCap']
+
+        totaldebt = info['totalDebt']
+        totalcash = info['totalCash']
+
+        # Earnings yield 
+        earningsYield = ebit/(marketcap + totaldebt - totalcash)
+        
+        
+        row = {
+               'stock': stock, 
+               'ROCE':roce, 
+               'earningsYield':earningsYield, 
+               'marketcap': marketcap, 
+               'ebit':ebit, 
+               'totaldebt':totaldebt, 
+               'sector':sector
+               
+              }
+        
+        stocks_with_ratios = pd.concat([stocks_with_ratios, pd.DataFrame([row])], ignore_index=True)
+        
+    except:
+        print("An exception occurred for ", stock)
+Step 4 — Rank the stocks based on Earnings Yield and ROC and calculate total rank based on combined scores and select 30 top ranked stocks for investing
+# Filter out all stocks with market cap less than 100 crore
+# Also, filter out al stocks in financial services and utilities sector
+stock_with_ratios = stocks_with_ratios.copy()
+
+
+stock_with_ratios = stock_with_ratios[stock_with_ratios['marketcap']/10000000 > 100 ]
+stock_with_ratios = stock_with_ratios[stock_with_ratios['sector'] != 'Financial Services'] 
+stock_with_ratios = stock_with_ratios[stock_with_ratios['sector'] != 'Utilities']
+
+# Rank the stocks based on their ROCE number and Earings Yield
+# Calcuate the total score, by adding the two ranks and calculate the total rank
+# Pick the top 30 stocks for investment
+stock_with_ratios['ROCE_rank'] = stock_with_ratios['ROCE'].rank(ascending=False)
+stock_with_ratios['EY_rank'] = stock_with_ratios['earningsYield'].rank(ascending=False)
+stock_with_ratios['Total_score'] = stock_with_ratios['EY_rank'] + stock_with_ratios['ROCE_rank']
+stock_with_ratios['Total_rank'] = stock_with_ratios['Total_score'].rank(ascending=True)
+stock_with_ratios[stock_with_ratios['Total_rank'] < 31].sort_values(by=['Total_rank'])
+The result of running the above code will give 30 top ranked stocks as below:
+
+
+The results above are as of 23rd August, 2024
+Step 5 — Rebalance every year
+It is always better to run this strategy after the quarterly results are published by all the companies. As mentioned earlier in the article, you should rerun the stock picking code every year and rebalance the portfolio.
+
+Conclusion
+Joel Greenblatt’s Magic Formula offers a systematic, evidence-based approach to value investing that has proven effective over time. By focusing on companies with high earnings yields and strong returns on capital, the strategy seeks to identify undervalued stocks with solid growth potential. However, as with any investment strategy, it is not without risks and limitations. Investors considering the Magic Formula should be prepared to stay the course through periods of underperformance and be aware of the strategy’s inherent constraints.
+
+In summary, the Magic Formula is a powerful tool for those looking to simplify their investment process while maintaining a disciplined approach to selecting high-quality stocks at attractive prices.
+
+Disclaimer: I am not a financial advisor, the content in this article is solely for educational purposes. You should always contact your financial advisor before making any kind of investment decision.

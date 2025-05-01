@@ -1,0 +1,223 @@
+Using Visual LLMs in large scale multi-label image classification pipelines
+Itay V
+Lightricks Tech Blog
+Itay V
+
+·
+Follow
+
+Published in
+Lightricks Tech Blog
+
+·
+7 min read
+·
+Apr 9, 2024
+80
+
+
+
+
+
+
+
+In this blog I will cover the pros and cons of using a Visual Large Language Model, more specifically LLaVA-1.6, in an offline batch zero-shot multi-label classification setting. I will also provide code that enables running LLaVA-1.6 in batches. Finally I will compare LLaVA’s performance with the ViT-B-32 CLIP model on an age classification task.
+
+A little context on CLIP
+CLIP models, which were introduced in 2021, revolutionized zero-shot image classification. They are lightweight, easy to infer, and can classify on many different categories. Python’s open_clip package provides an easy interface to download and infer the different variants of CLIP, e.g: openai ViT-B/32, laion ViT-H-14 etc..
+
+CLIP’s compact size ( < 1 GB ) lets it fit on older GPUs such as the nvidia-tesla-t4 and run inference with great throughput. This makes it a great choice for batch classification pipelines.
+
+CLIP zero-shot classification is done by comparing the cosine similarity of the image embedding with embeddings of prompt texts (e.g “a picture of a dog”, “a picture of a cat”), and then applying softmax to generate probabilities.
+
+Although convenient to run, the zero-shot classification task with CLIP has some drawbacks, some of which include:
+
+You need to know the set of all possible classes and their prompts in advance, which means that “open set” class labels require defining a “general nonsense” class that needs to be predicted when none of the other labels fit. It is tough to find a prompt that matches the “doesn’t match any other” class.
+Multi-label classification problems require different heuristics to solve.
+Using LLaVA-34B for multi-label classification
+We will use LLaVA-34B to extract structured data from pictures. Let’s say we are interested in extracting information about the scenery of a picture, for example:
+
+Blue sky / cloudy / golden hour / indoors / night time
+We are also interested in features of people, for example
+
+Number of people in the picture.
+For each person, we would like to know their approximate age group and the color of their shirt.
+We will tell LLaVA to output its response in a JSON format. The scenery data is global to the whole picture so we need a single JSON of the form {"scenery": "Blue sky"}. But because a picture could contain a variable amount of people, for example a family photo, we want to be able to extract the data per person. So we ask LLaVA to write a JSON of the form {"age_group": "young adult, "shirt_color": "green"}for each person in the photo.
+
+
+using the open LLaVA demo
+And LLaVA’s response:
+
+{
+  "scenery": "indoors",
+  "people": [
+    {
+      "age_group": "middle aged adult",
+      "shirt_color": "green"
+    },
+    {
+      "age_group": "middle aged adult",
+      "shirt_color": "blue"
+    },
+    {
+      "age_group": "child",
+      "shirt_color": "white"
+    }
+  ]
+}
+Perfect, from a single inference request we can know the scenery, the number of people, their ages and the color of their shirts.
+
+Now how do we fit the classification into a pipeline?
+First of all, let’s see how we can infer the model in Python.
+
+I am using a machine with
+
+48 CPU cores
+192 GB RAM
+4xL4 GPUs
+300 GB boot disk
+Python 3.11
+After following the installation steps in LLaVA’s github repo and running the SGLang worker, we can start sending requests to the worker using the SGLang client.
+
+Here are the required imports:
+
+import sglang as sgl
+from sglang import function, system, user, assistant, gen, set_default_backend, RuntimeEndpoint
+from sglang.srt.constrained import build_regex_from_object
+from pydantic import BaseModel
+from enum import Enum
+
+# set sglang backend
+set_default_backend(RuntimeEndpoint("http://localhost:30000"))
+And this is the inference logic:
+
+@sgl.function
+def image_qa(s, image_file, question):
+  s += sgl.user(sgl.image(image_file) + question)
+  s += sgl.assistant(sgl.gen("answer", max_tokens=100, temperature=0))
+  prompt = (
+    'Fill the json to describe the picture. '
+    '{'
+    '"scenery": "blue_sky|golden_hour|indoors|night_time",'
+    '"people": [{"age_group": "baby"|"child"|"young_adult"|"middle_aged_adult", "shirt_color": ""}]'
+    '}'
+  )
+
+now = time()
+print(image_qa.run(image_file="family_photo.jpeg", question=prompt)["answer"])
+elapsed = time() - now
+print(f"request took {elapsed} seconds")
+
+Photo taken from iStock
+And here is the result ( for the image above )
+
+```json
+{
+  "scenery": "indoors",
+  "people": [
+    {
+      "age_group": "middle_aged_adult",
+      "shirt_color": "green"
+    },
+    {
+      "age_group": "middle_aged_adult",
+      "shirt_color": "blue"
+    },
+    {
+      "age_group": "child",
+      "shirt_color": "white"
+    }
+  ]
+}
+```
+request took 10.042147636413574 seconds
+So the model classified the image perfectly, but the request is quite slow. This is not scalable for a pipeline that needs to classify thousands of images per day.
+
+Batch Inference on LLaVA
+We can use SGLang’s batching API to increase the throughput of the model. To do this, let’s implement a batch function:
+
+def batch(image_files):
+  requests = [{"image_file": file, "question": prompt} for file in image_files]
+  states = image_qa.run_batch(
+    requests
+    max_new_tokens=200,
+  )
+  return [s["answer"] for s in states]
+Let’s try invoking this image for different batch sizes and see how much throughput we can squeeze out of these 4xL4s:
+
+for bs in [2, 4, 8, 16, 32, 64, 128, 256]:
+  images = ["family_photo.jpeg"] * bs
+  now = time()
+  responses = batch(images)
+  elapsed = time() - now
+  print(f"batch size of {bs} took {elapsed:.2f} seconds")
+  print(f"throughput: {(len(images) / elapsed):.2f} images / second")
+The output:
+
+batch size of 2 took 15.50 seconds
+throughput: 0.13 images / second
+batch size of 4 took 11.64 seconds
+throughput: 0.34 images / second
+batch size of 8 took 13.12 seconds
+throughput: 0.61 images / second
+batch size of 16 took 15.19 seconds
+throughput: 1.05 images / second
+batch size of 32 took 20.30 seconds
+throughput: 1.58 images / second
+batch size of 64 took 34.72 seconds
+throughput: 1.84 images / second
+batch size of 128 took 103.57 seconds
+throughput: 1.24 images / second
+
+Output plotted in a graph
+Not bad! Almost 2 images/second on a batch size of 64. After this batch size the GPUs started running out of memory so that’s why we can see a decline in performance after the 64 mark.
+
+The RadixAttention mechanism of the SGLang engine works great with our use case because we re-use the same prompt over and over across batches. The hit rate of LLaVA’s language model KV cache can be seen in the SGLang logs: tree_cache_hit_rate: 98.34%.
+
+LLaVA Evaluation VS CLIP on Age Classification
+So how does LLaVA compare to CLIP on a hard task like age classification?
+
+I used a dataset containing 150 pictures of people and their respective age bin; 18–20, 21–30 … 51–60.
+
+To classify with CLIP, I compared the distance between the picture embedding and the embeddings of the prompts: [“a picture of a person aged 18 to 20”, “a picture of a person aged 21 to 30”, etc.]. Then I applied softmax to get the normalized probabilities of each age bin.
+
+To classify with LLaVA, I gave it this prompt:
+
+“describe the person face in the photo using only allowed attributes per category from the list:
+
+gender — male , female
+age — 18–20, 21–30, 31–40, 41–50, 51–60
+output a json only and nothing else”
+
+I added the gender key just to see whether the JSON works properly; I didn’t do anything with it.
+
+Here is an example of a response from LLaVA:
+
+
+I tried both LLaVA-Mistral-7B and LLaVA-34B
+
+The results:
+
+
+accuracy comparison between vision models
+
+confusion matrices
+LLaVA-Mistral-7B has a “nicer” confusion matrix because if every 2 adjacent bins were merged, it would get the highest accuracy of the 3.
+
+An overall accuracy of a little over 50% might seem bad, but at a task like this which is even hard for a human to do, it seems very promising. Looking at the confusion matrix of LLaVA-Mistral we can see that except for 2 cases out of the 150, it predicted the age correctly within a range of 10 years, so if every 2 adjacent age buckets were merged into one (for example 18–20, 21–30 would turn to 18–30), we would get over 90% accuracy.
+
+While CLIP performed quite well too, this is a dataset of only a single person in a picture. If we had data that contained more than a single person, it would be very hard to use CLIP to approximate the age of every person in the photo, while with LLaVA we could have a JSON per person / entity in the picture.
+
+Conclusion:
+The LLaVA models are a viable option for multi-label classification pipelines, comparable to GPT-4V on multiple tasks, and probably quite a lot cheaper if you have the hardware for it.
+
+In my example I used a 4XL4 rig because I couldn’t get a hold of an A-100 rig (let alone a H-100) which constrained me to 90 GB of GPU memory and less FLOPS. If you have the budget for bigger rigs / stronger GPUs you can scale up the pipeline quite easily thanks to SGLangs’ built-in tensor parallelism option.
+
+I do want to mention that I didn’t use SGLang’s regex capabilities because I couldn’t get it to work. While it seems promising, SGLang is not production ready yet (version 0.1) and it would take time until you can reliably use it in your production pipelines.
+
+References:
+
+LLaVA repo
+SGLang
+Age classification dataset
+Open Clip

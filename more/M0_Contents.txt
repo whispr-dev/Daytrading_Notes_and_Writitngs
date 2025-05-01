@@ -1,0 +1,15 @@
+It'll cover:
+
+Momentum and dual-momentum strategies
+
+Incremental and dynamic time series learning
+
+Kolmogorov–Arnold Networks (KANs)
+
+Structured State Space Models (SSMs)
+
+CNN and ensemble deep learning for trading
+
+Real-world algo deployment in crypto
+
+Visual LLM integration and analysis

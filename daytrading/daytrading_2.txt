@@ -1,0 +1,329 @@
+Automating Trades with Fidelity
+Amal Tyagi
+Amal Tyagi
+
+·
+Follow
+
+9 min read
+·
+Apr 2, 2024
+262
+
+
+2
+
+
+
+
+
+(Read with no paywall here.)
+
+As you may know, I’ve developed and shared several rigorously-tested personal trading strategies this past year. I use Python to make my trades, but so far I’ve only shared code on how to run backtests. Beyond analysis on historical data, though, we need to know how to fully take advantage of our platforms in real-time trading.
+
+So today, I’ll zero in on Fidelity to show you how to allow your computer to make trading decisions. And in future articles, we’ll cover Analyzing Fundamentals (CAN SLIM) and Scraping Option Chains—all with Fidelity.
+
+I often backtest my strategies with Python’s yfinance, but for actual trading it’s best to avoid unnecessary third-party libraries or APIs. Fidelity offers a wide set of data, including technicals, fundamentals, and news through its Research service. If you don’t have an account but would like to access this data, you can always sign up for a brokerage account. It’s free and you don’t actually have to deposit anything to access Fidelity Research.
+
+
+Fidelity isn’t traditionally used for building trendy trading bots, but it offers advanced analysis capabilities and very low trading fees, making it ideal vs. more progressive, automation-heavy brokers.
+Before we begin, please note that I have received explicit permission to automate trades for my personal portfolio. I suggest you do the same to avoid any potential issues on your end.
+
+Also note that the functionality being covered here is separate from the basic automation built-into Fidelity. We already have the ability to schedule trade execution on the platform, either on a recurring basis or when predefined price levels are met.
+
+
+Recurring buys and stop losses are important forms of trade automation handled by Fidelity, both of which provide risk mitigation. But there’s no “intelligent reasoning” at work unless we implement it ourselves.
+Our custom code will take Fidelity’s functionality to a new level by allowing for scheduled stock screening and more nuanced trading decisions. So rather than let our broker blindly buy and sell for us, we can choose what to trade and when based on a custom trading strategy. We can also choose to update stop losses more dynamically (even when compared to trailing stop losses) to fit to our exact needs.
+
+For accessibility reasons we’re also not considering Active Trader Pro, which is Fidelity’s desktop app for advanced users. While this tool can be useful and has some built-in shortcuts, it’s not nearly as efficient or sleek as the website itself. And especially for MacOS, ATP is too slow and clunky to be useful in really any form of trading. The web app, on the other hand, is effective and easy to use with a Python bot.
+
+Let’s get into the code!
+
+Login to Fidelity
+Fidelity allows browser automation for personal use, but it has placed some restrictions which prevent common web scraping methods. Specifically, we won’t be able to use Selenium with Fidelity. Unless there’s a workaround I don’t know about (in which case, leave it in the comments!), Fidelity recognizes login attempts from automated Selenium browsers.
+
+So our solution combines the subprocess and pyautogui Python libraries with the Shortkeys extension. This will allow you to open your standard web browser with Python and manipulate elements on the resulting webpages with snippets JavaScript code. While it’s as elegant as Selenium, it does work well and is used in my market-beating day trading strategy.
+
+First, head to the Fidelity login page to see what will need to be automated on your browser. You may find that your username and password have already been loaded, and all you need to do is click the login button. In this case you won’t need shortcuts for your username and password!
+
+Add the following Shortkeys shortcuts as needed, making necessary changes to the assigned triggers if you’re not on MacOS:
+
+
+The corresponding JavaScript snippet for each shortcut should look something like this:
+
+// Fidelity Username (ctrl+l)
+document.getElementById('dom-username-input').value = 'YOUR_USERNAME_FIRST_CHARACTER';
+
+// Fidelity Password (ctrl+option+l)
+document.getElementById('dom-pswd-input').value = 'YOUR_PASSWORD_FIRST_CHARACTER';
+
+// Fidelity Login (ctrl+b)
+document.getElementById('dom-login-button').click();
+Place the code in each shortcut’s details, making sure to check “Active while in inputs” for each. Save changes by restarting your browser. You should now be able to head to Fidelity and login with keyboard shortcuts!
+
+Note that you won’t specify our entire username and password in Shortkeys. While you’ll input the first character of each with JavaScript, you’ll finish typing them out with Python so that the website recognizes humanlike input. This increases our odds of a successful login — and it also ensures that you don't leak important info to Shortkeys.
+
+Your starter code and helper functions might look like this. Libraries are imported, Shortkeys commands are set to be triggered with pyautogui, and some helper functions are defined to make traversing a webpage easier using only simulated keypresses.
+
+import subprocess
+import pyautogui
+import pyperclip
+pyautogui.FAILSAFE = False # Avoid killing script on mouse movement
+
+# Ensure shortkeys extension is configured on your browser
+shortkeys = {
+    'USERNAME_INPUT': ['ctrl', 'l'], # document.getElementById('dom-username-input').value = 'username_excluding_last_characters';
+    'PASSWORD_INPUT': ['ctrl', 'option', 'l'], # document.getElementById('dom-pswd-input').value = 'password_excluding_last_characters';,
+    'LOGIN_BUTTON': ['ctrl', 'b'], # document.getElementById('dom-login-button').click();
+}
+
+# Simulate pressing tab n times
+def tab(n=1):
+    if n > 0:
+        for _ in range(n):
+            pyautogui.press('tab')
+    else:
+        for _ in range(-n):
+            pyautogui.hotkey('shift', 'tab')
+
+# Simulate pasting from clipboard
+def paste(s):
+    pyperclip.copy(s)
+    pyautogui.hotkey('command', 'v')
+
+# Copy and return text on page
+def get_page_text():
+    page = ''
+    while not len(page):
+        pyautogui.hotkey('command', 'a')
+        sleep(.05)
+        pyautogui.hotkey('command', 'c')
+        sleep(.05)
+        page = pyperclip.paste()
+        if not page:
+            page = ''
+            continue
+        if len(page):
+            break
+    return page
+
+# Simulate waiting for text to appear or disappear onto or from page
+# Returns boolean if max_seconds defined, None otherwise
+def wait_for(s, repeat_hotkey='a', max_seconds=None, appear=True):
+    copied = ''
+    if max_seconds:
+        a = datetime.today().time()
+        b = datetime.today().time()
+        while datetime.combine(datetime.today(), b) - datetime.combine(datetime.today(), a) < timedelta(seconds=max_seconds):
+            pyautogui.hotkey('command', repeat_hotkey)
+            pyautogui.hotkey('command', 'c')
+            copied = pyperclip.paste()
+            if not copied:
+                copied = ''
+                b = datetime.today().time()
+                continue
+            if appear and s in copied:
+                return True
+            elif not appear and s not in copied:
+                return True
+            b = datetime.today().time()
+        return False
+    else:
+        while (appear and s not in copied) or (not appear and s in copied):
+            pyautogui.hotkey('command', repeat_hotkey)
+            pyautogui.hotkey('command', 'c')
+            copied = pyperclip.paste()
+            if not copied:
+                copied = ''
+    return None if not max_seconds else True if appear else False
+Now for the actual login function. Please be sure to include your browser path, filling in the remainder of your credentials as needed.
+
+# Log into Fidelity using Shortkeys to fill form
+def login(browser='Google Chrome'):
+    login_url = 'https://digital.fidelity.com/prgw/digital/login/full-page'
+    subprocess.Popen(["open", "-na", browser, "--args", "--new-window", login_url])
+    wait_for('YOUR_USERNAME_HERE')
+    pyautogui.hotkey(shortkeys['LOGIN_BUTTON'])
+
+    if not wait_for(login_url, 'l', appear=False, max_seconds=60):
+        pyautogui.hotkey('command', 'w')
+        login(browser=browser)
+    logged_in_url = 'https://digital.fidelity.com/ftgw/digital/portfolio/summary'
+    wait_for(logged_in_url, 'l')
+
+login()
+You’ll need to rework this code for it to function per your account details. Also, with Popen(), you can choose to open Fidelity in a private browser to ensure a clear cache upon login. But in any case, you should now be able to login to your account completely automatically.
+
+Fetch Real-Time Prices
+Fidelity offers many ways to analyze stocks, and its developers are constantly adding more ways. For now we’ll focus on the main order ticket page, which allows us to scrape prices, volumes, and spreads for any tradeable asset. Our helper function check_spread() will return the current bid/ask prices shown on a page.
+
+# Copy and return bid/ask, representing current low/high
+def check_spread():
+    pyautogui.press('space')
+    sleep(.15)
+    pyautogui.hotkey('command', 'c')
+    page = pyperclip.paste()
+    if 'Symbol Not Found' in page:
+        return [None, None]
+    bid_index = page.find("Bid")
+    ask_index = page.find("Ask")
+    bid_text = page[bid_index:].split()[2]
+    ask_text = page[ask_index:].split()[2]
+    return [float(bid_text), float(ask_text)]
+The following code comes directly from my day trading strategy. It opens a new tab for each ticker in the watchlist to reduce overall load time, waits for the final half hour of the premarket to begin, and iterates through each page. The idea here is that in the 30 minutes after 9am, we’ll get real-time premarket spreads for each ticker. If any of these levels are broken after 9:30am, we have a trading signal for the direction specified with that ticker.
+
+from datetime import datetime, time, timedelta
+from time import sleep
+import pytz
+
+# Return premarket max/mins for each ticker
+def get_premarket_limits(tickers, directions):
+    limits = {}
+    to_skip = []
+    trade_url = 'https://digital.fidelity.com/ftgw/digital/trade-equity/index/orderEntry'
+    pyautogui.hotkey('command', 'l')
+    sleep(0.05)
+    paste(trade_url)
+    pyautogui.press('enter')
+    sleep(.15)
+    for i, ticker in enumerate(tickers[1:]):
+        pyautogui.hotkey('command', 't')
+        sleep(0.05)
+        paste(trade_url)
+        pyautogui.press('enter')
+
+    sleep(10)
+
+    # Open tab for each potential trade
+    for i, ticker in enumerate(tickers):
+        pyautogui.hotkey('command', 'option', 'right')
+        sleep(.15)
+        direction = directions[i]
+        tab(3)
+        paste(ticker)
+        pyautogui.press('enter')
+        wait_for('Bid')
+        tab(4)
+        pyautogui.press('space')
+        tab(-2)
+
+    # Wait until 9am ET to begin checking premarket prices
+    while True:
+        if datetime.now(pytz.timezone('US/Eastern')).time() >= premarket_open:
+            break
+        sleep(.1)
+
+    # Continue checking premarket prices until 9:28am ET
+    while datetime.now(pytz.timezone('US/Eastern')).time() < premarket_close:
+        for i, ticker in enumerate(tickers):
+            direction = directions[i]
+            pyautogui.hotkey('command', 'option', 'right')
+            sleep(.15)
+            if [ticker, direction] in to_skip:
+                pyautogui.hotkey('command', 'option', 'right')
+                sleep(.075)
+                continue
+            bid, ask = check_spread()
+            if bid and ask:
+                if ticker not in limits.keys():
+                    limits[ticker] = [bid, ask]
+                else:
+                    if bid < limits[ticker][0]:
+                        limits[ticker][0] = bid
+                    if ask > limits[ticker][1]:
+                        limits[ticker][1] = ask
+            else:
+                to_skip.append([ticker, direction])
+
+    pyautogui.hotkey('command', 'option', 'right')
+                    
+    print(limits)
+    return limits, to_skip
+
+# Check sample tickers on defined trade directions
+tickers, directions = ['AAPL','NVDA','BTBT'], ['b', 'ss', 'b']
+init_limits, to_skip = get_premarket_limits(tickers, directions)
+You’ll probably need to adjust the specified times for testing, since the script isn’t intended to run outside of the defined premarket hours. But in any case, that’s the code you need to constantly check prices for multiple assets—in real-time, for free, and without a broker API.
+
+Our ability to directly access the web GUI for real-time data is both a feature and a flaw. While we can fetch prices and spreads at effectively the same rate as compared to APIs like Interactive Brokers, we are unable to run our code in the background without interfering with the GUI actions. A VM or a separate computer altogether may be necessary for your use case, unless you’re happy to watch your computer flip through browser tabs for 30 minutes every morning.
+
+Finally: Execute A Trade
+Once you’ve collected premarket prices for 30 minutes (or 28 minutes as offered on Fidelity), you might run this to open some n number of trades as trading signals become present.
+
+Make sure you know what you’re doing before you run this. I am not making any suggestions on what to trade or when. But the below code will make a trade with the defined amount of cash or margin when a price limit is exceeded.
+
+import math
+
+cash = 1000 # USD
+n = 1 # trades to be opened
+
+# Check all stocks until n stocks have been traded
+def open_trades(tickers, directions, to_skip, preset_limits, n):
+    m = 0 # Count number of stocks traded
+    tickers_traded, directions_traded = [], []
+
+    # Wait for market to open
+    while True:
+        if premarket_close <= datetime.now(pytz.timezone('US/Eastern')).time():
+            break
+        
+    # Continue cycling through tabs until all trades have been opened. Remove any from consideration as needed
+    while m < n:
+        for i in range(len(tickers)):
+            if datetime.now(pytz.timezone('US/Eastern')).time() < market_close:
+                try:
+                    ticker = tickers[i % len(tickers)]
+                    direction = directions[i % len(directions)]
+                    if [ticker, direction] in to_skip:
+                        pyautogui.hotkey('command', 'option', 'right')
+                        sleep(0.075)
+                        continue
+                    
+                    t = 'Long' if direction == 'b' else 'Short'
+                    limits = preset_limits[ticker]
+                    limit_price = limits[0 if direction == 'ss' else 1]
+                    limit_other = limits[1 if direction == 'ss' else 0]
+                    print(f'Checking whether to {t} {ticker} @ {round(limit_price, 2)}')
+                    
+                    bid, ask = check_spread()
+                    if bid and ask:
+                        if (direction == 'b' and ask > limit_price) or (direction == 'ss' and bid < limit_price):
+                            c = 1/3 * cash if direction == 'ss' else 2/3 * cash
+                            shares = max(.1, math.floor(c / limit_price))
+                            if execute_trade(ticker, direction, shares):
+                                m += 1
+                                tickers_traded.append(ticker)
+                                directions_traded.append(direction)
+                                to_skip.append([ticker, direction])         
+                                if m == n:
+                                    break
+                            else:
+                                pyautogui.hotkey('command', 'option', 'right')
+                                sleep(0.075)
+                                continue
+                        else:
+                            to_skip.append([ticker, direction])
+                            pyautogui.hotkey('command', 'option', 'right')
+                            sleep(0.075)
+                            continue
+
+                    elif (direction == 'b' and bid < limit_other) or (direction == 'ss' and ask > limit_other):
+                        print(f'No longer attempting to {t} {ticker} as opposite limit has been exceeded')
+                        to_skip.append([ticker, direction])
+                except Exception as e:
+                    print(f'Check failed for {ticker} or error: {e}')
+                    to_skip.append([ticker, direction])
+            else:
+                print(f'Waiting for next trading day')
+
+            pyautogui.hotkey('command', 'option', 'right')
+            sleep(0.075)
+
+open_trades(tickers, directions, to_skip, preset_limits=init_limits, n=n)
+Again, change the time conditions when testing, and traverse the page as needed to check the box for postmarket prices if you’re testing after-hours.
+
+As for closing the trade, you have several options. I’ve left out my code for this part because it’s a little messy — it requires several browsers and handling of a potential lag from a small caching issue with Fidelity. While this is a significant hurdle for minute-long day trades, it’s less of an issue if you can wait a few seconds or minutes for your position to show up on your account. Once it loads, you can simply adjust the above code to instead close any open trades using a stop loss or other order. And if you’d like to apply a more specific exit strategy, just edit the prior code to constantly check for exit signals in the spread, volume, and so on.
+
+Now it’s your turn. If you need suggestions for building a stock watchlist, feel free to follow along to see how to screen for the best-performing companies based on fundamentals. Or check out my other trading articles to get inspiration for technical backtests.
+
+Thanks for reading!

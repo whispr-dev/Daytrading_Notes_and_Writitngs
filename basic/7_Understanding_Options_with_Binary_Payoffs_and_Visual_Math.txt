@@ -1,0 +1,184 @@
+🧠 The Beginner's Blueprint to Day Trading with Python
+Part 7: Understanding Options with Binary Payoffs and Visual Math
+✦ What is an Option, Really?
+An option gives you the right, but not the obligation, to buy or sell something at a specific price (called the strike) before a specific date (expiration).
+
+Let’s focus on two basic types:
+
+
+Option Type	You Think Price Will…	You Can…
+Call Option	Go UP	Buy at strike
+Put Option	Go DOWN	Sell at strike
+Imagine you have a CALL on AAPL at $150.
+If AAPL hits $170, you’re like: “Heh. I’ll buy at $150 and sell instantly for $170.”
+You just made $20 per share, minus the option cost (called the premium).
+
+✦ But What’s a Binary Option?
+Binary = "Yes/No".
+
+You get a fixed payout if the condition is true, or nothing if it isn’t.
+
+Example:
+
+“If AAPL closes above $150 by Friday, pay me $100. Otherwise, pay $0.”
+
+They’re called digital options, binary calls/puts, or all-or-nothing bets.
+
+✦ Visualizing Option Payoffs
+Let’s plot it!
+
+📄 strategies/option_payoffs.py
+
+python
+Copy
+Edit
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Range of possible underlying prices
+S = np.linspace(100, 200, 500)
+
+# Basic binary call: pays 100 if S > strike
+strike = 150
+payout = 100
+binary_call = np.where(S > strike, payout, 0)
+
+# Basic binary put: pays 100 if S < strike
+binary_put = np.where(S < strike, payout, 0)
+
+plt.figure(figsize=(10, 5))
+plt.plot(S, binary_call, label='Binary Call ($100 if S > 150)', color='green')
+plt.plot(S, binary_put, label='Binary Put ($100 if S < 150)', color='red')
+plt.axvline(strike, linestyle='--', color='gray', alpha=0.5)
+plt.xlabel("Stock Price at Expiration (S)")
+plt.ylabel("Payout")
+plt.title("Binary Option Payoffs")
+plt.legend()
+plt.grid()
+plt.tight_layout()
+plt.show()
+You’ll see:
+
+A green step for binary call
+
+A red step for binary put
+
+A clear vertical line at the strike price
+
+✦ Add the Heaviside Function
+Binary options = perfect match for the Heaviside step function, a common math tool.
+
+python
+Copy
+Edit
+def heaviside(x):
+    return 0 if x < 0 else 1
+So:
+
+payoff = 100 * heaviside(S - strike) → binary call
+
+payoff = 100 * heaviside(strike - S) → binary put
+
+To make it vectorized (faster for arrays), use NumPy’s version:
+
+python
+Copy
+Edit
+binary_call = 100 * np.heaviside(S - strike, 1)
+binary_put  = 100 * np.heaviside(strike - S, 1)
+The second argument in np.heaviside(x, h0) is the value returned when x == 0 (tie).
+
+✦ Black-Scholes for Binary Options (Intro)
+Binary options don’t use the regular Black-Scholes N(d1) formula — they use N(d2) directly.
+
+Here’s the formula for a binary call:
+
+Binary Call Price = 
+𝑒
+−
+𝑟
+𝑇
+⋅
+𝑁
+(
+𝑑
+2
+)
+⋅
+𝑄
+e 
+−rT
+ ⋅N(d 
+2
+​
+ )⋅Q
+
+Where:
+
+𝑟
+r = risk-free interest rate
+
+𝑇
+T = time to expiration (in years)
+
+𝑄
+Q = payout
+
+𝑁
+(
+𝑑
+2
+)
+N(d 
+2
+​
+ ) = cumulative normal dist evaluated at d2
+
+💡 Code: Black-Scholes Binary Option Formula
+📄 strategies/binary_option_pricing.py
+
+python
+Copy
+Edit
+from scipy.stats import norm
+import numpy as np
+
+def binary_call_price(S, K, T, r, sigma, Q=1.0):
+    d2 = (np.log(S/K) + (r - 0.5*sigma**2)*T) / (sigma * np.sqrt(T))
+    return np.exp(-r * T) * norm.cdf(d2) * Q
+
+# Example
+S = 150      # current price
+K = 155      # strike
+T = 0.25     # 3 months
+r = 0.01     # risk-free rate
+sigma = 0.25 # volatility
+Q = 100      # payout
+
+price = binary_call_price(S, K, T, r, sigma, Q)
+print(f"Binary Call Option Price: ${price:.2f}")
+This will give you a fair value for a binary call option under common market conditions.
+
+Want a binary put? Just change norm.cdf(d2) → norm.cdf(-d2)
+
+✦ Real World Uses of Binary Options
+Forex markets use binary calls all the time
+
+Used for predicting events (e.g. “Will TSLA close above $700?”)
+
+Hedge funds use them for structured payouts
+
+Can be useful for modeling “on/off” signals in strategy logic too
+
+✦ Coming Up Next: Full Backtesting Framework
+In Part 8, you’ll:
+
+Build your first mean reversion strategy
+
+Backtest it over 10 years using zipline-reloaded
+
+Analyze risk, drawdown, and performance using pyfolio
+
+Visualize real returns and see if your logic actually works
+
+You’ll be a proper quant in just one more step, fren.

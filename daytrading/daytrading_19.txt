@@ -1,0 +1,225 @@
+Scraping SEC Financials with Python
+Amal Tyagi
+Amal Tyagi
+
+·
+Follow
+
+7 min read
+·
+Feb 26, 2024
+156
+
+
+1
+
+
+
+
+
+(Read with no paywall here.)
+
+Last year I published 2 stories showing you how to scrape and evaluate fundamentals for any publicly-traded company. If you’re new to CAN SLIM analysis, feel free to check out my results and code from that project.
+
+While the code was useful in combining data from several online sources, I now see that it’s a little outdated. Even if I found workarounds for the newly-implemented bot detection on WSJ and other sites, it’s obvious that for more complex machine learning models, we need more than just the 4 or 5 most recent years of data. We need a fuller, more reliable method.
+
+So today we’ll get company data right from the source: official SEC reports!
+
+We’ll download the ZIP files from this link, and then run through each to get all the company data reported for that fiscal quarter. We’ll then store our structured data and eventually conduct deeper analysis like O’Neil’s CAN SLIM. (And yes, I’ll be sharing the full code to do this yourself.)
+
+Let’s get into it!
+
+
+Fetch SEC Data
+There are several ways to directly access company reports from government data. One way is to access the EDGAR database either through the SEC website or with Python’s edgar library. This would enable you to download official 10-Q and 10-K reports for closer inspection.
+
+Unfortunately, these files are highly unstructured, as many companies report financials in slightly different ways. If you’d still like to try to access these files, please let me know and I’d be happy to share the process! But for now we’ll focus on SEC’s Financial Statement Data Sets, not EDGAR.
+
+A ZIP file is uploaded to this site every quarter, providing a much easier way to collect fundamentals as compared to scraping thousands of 10-Q PDF files. The data in each ZIP, while not perfect, is much more structured than any other collection of company reports that I’ve seen.
+
+Here’s a sample of what we’ll be scraping:
+
+{'Date': 20230831, 'Ticker': 'MU', 'Fundamental': 'EarningsPerShareBasic', 'Value': -5.34}
+{'Date': 20230831, 'Ticker': 'MU', 'Fundamental': 'NetIncomeLoss', 'Value': -5833000000.0}
+{'Date': 20230831, 'Ticker': 'MU', 'Fundamental': 'Liabilities', 'Value': 20134000000.0}
+{'Date': 20230831, 'Ticker': 'MU', 'Fundamental': 'NetCashProvidedByUsedInOperatingActivities', 'Value': 1559000000.0}
+{'Date': 20230831, 'Ticker': 'MU', 'Fundamental': 'StockholdersEquity', 'Value': 44120000000.0}
+
+{'Date': 20220831, 'Ticker': 'MU', 'Fundamental': 'EarningsPerShareBasic', 'Value': 7.81}
+{'Date': 20220831, 'Ticker': 'MU', 'Fundamental': 'NetIncomeLoss', 'Value': 8687000000.0}
+{'Date': 20220831, 'Ticker': 'MU', 'Fundamental': 'Liabilities', 'Value': 16376000000.0}
+{'Date': 20220831, 'Ticker': 'MU', 'Fundamental': 'NetCashProvidedByUsedInOperatingActivities', 'Value': 15181000000.0}
+{'Date': 20220831, 'Ticker': 'MU', 'Fundamental': 'StockholdersEquity', 'Value': 49907000000.0}
+But first we need to download all of the ZIPs! There are several ways to do this; one way is simply to visit this page and manually click each Download button. But using the process described in my most recent story, I’m able to download the ZIPs in a fully-automated way using a combination of Python and JavaScript. Here’s how you can do it too if you don’t want to manually click each button.
+
+Simply install the Shortkeys extension and add the following shortcuts:
+
+
+The JavaScript code associated with ctrl+e should simulate clicking on the download button on each page:
+
+const downloadButton = document.querySelector('a.btn.btn-primary.resource-url-analytics.resource-type-None');
+if (downloadButton) downloadButton.click();
+And after each download, we’ll need to iterate to the next page. Here’s the code to be associated with ctrl+d:
+
+let activeNavItem = document.querySelector('li.nav-item.active');
+let sibling = activeNavItem.nextElementSibling;
+while (sibling && !sibling.classList.contains('nav-item')) {
+  sibling = sibling.nextElementSibling;
+}
+if (sibling && sibling.querySelector('a')) sibling.querySelector('a').click();
+You can then use pyautogui to fully automate the downloads with this:
+
+import subprocess
+import pyautogui
+import pyperclip
+from time import sleep
+
+# Simulate waiting for text to appear onto page
+def wait_for(s):
+    copied = ''
+    while s not in copied:
+        pyautogui.hotkey('command', 'a')
+        pyautogui.hotkey('command', 'c')
+        copied = pyperclip.paste()
+        if not copied:
+            copied = ''
+
+# Open SEC Financial Data Sets and wait for page to load
+sec_url = 'https://catalog.data.gov/dataset/financial-statement-data-sets/resource/c8fac982-c2d3-4c7e-b984-1fc7ce8e9b82'
+subprocess.Popen(["open", "-na", "Google Chrome", "--args", "--new-window", sec_url])
+wait_for('DATA CATALOG')
+
+# Count number of files to download
+pyautogui.hotkey('command', 'a')
+pyautogui.hotkey('command', 'c')
+page = pyperclip.paste()
+num_links = page.split('Resources\n')[1].split('Share on Social Sites\n')[0].strip().count('\n')
+num_downloads = 0
+print(num_links)
+
+# Iterate through each page and download each file 
+while num_downloads <= num_links:
+    pyautogui.hotkey('ctrl', 'e')
+    sleep(.5)
+    pyautogui.hotkey('ctrl', 'd')
+    new_page = page[:]
+    while page == new_page:
+        pyautogui.hotkey('command', 'a')
+        pyautogui.hotkey('command', 'c')
+        new_page = pyperclip.paste()
+        if page == new_page:
+            sleep(1)
+    num_downloads += 1
+    print(num_downloads)
+Note that this code was written for Chrome on MacOS, so you’ll have to replace ‘command’ with ‘ctrl’ on Windows and maybe make slight changes for your specific browser. In any case, you’ll soon be ready to use this data for fundamental analysis! Place the ZIPs into a folder called ‘sec.’
+
+Filter Important Fundamentals
+As I explored last year, CAN SLIM analysis is a tried-and-true method to determine which companies are leading a bull market. It places a heavy focus on real company data like earnings, liabilities, and operating cash. While this financial data might not be everything we need to make decisions, it plays a big role for many investors.
+
+The items that we’ll be screening for are defined in the dataset as follows:
+
+cols = ['EarningsPerShareBasic', 'Liabilities', 'StockholdersEquity', 
+        'NetIncomeLoss', 'Revenues', 'WeightedAverageNumberOfSharesOutstandingBasic', 
+        'CashAndCashEquivalentsAtCarryingValue', 'NetCashProvidedByUsedInOperatingActivities']
+As you know, we’d normally have to look through each P&L statement, balance sheet, and cash flow statement to find these values. But the dataset provided by the SEC allows us to find everything all at once!
+
+Let’s walk through the next full script you’ll need to run.
+
+import pandas as pd
+import zipfile
+import os
+import json
+from datetime import datetime
+
+# Function to return ticker given an SEC-provided CIK
+def get_ticker_from_cik(cik):
+    try:
+        with open("company_tickers.json", "r") as file:
+            data = json.load(file)
+            for item in data.values():
+                if str(item["cik_str"]).zfill(10) == cik.zfill(10):
+                    return item["ticker"]
+    except FileNotFoundError:
+        print("Error: company_tickers.json file not found.")
+    except json.JSONDecodeError:
+        print("Error: Unable to decode JSON from company_tickers.json.")
+    return None
+
+# Main function to iterate through zip files in the sec directory and compile the data into sec-fundamentals.csv
+def compile_sec_facts():
+    sec_directory = 'sec/'
+    output_filename = 'sec-fundamentals-2.csv'
+    
+    # Check if output file exists, if not create it with headers
+    if not os.path.exists(output_filename):
+        pd.DataFrame(columns=['Date', 'CIK', 'Ticker', 'Fundamental', 'Value']).to_csv(output_filename, index=False)
+    
+    # Find & store all relevant data from the num.txt file in each ZIP
+    for zip_file in os.listdir(sec_directory):
+        if zip_file.endswith('.zip'):
+            zip_file_path = os.path.join(sec_directory, zip_file)
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                for file_name in zip_ref.namelist():
+                    if file_name.endswith('num.txt'):
+                        with zip_ref.open(file_name) as num_file:
+                            df_num = pd.read_csv(num_file, sep='\t')
+                            ciks = df_num['adsh'].apply(lambda x: x.split('-')[0]).unique()
+                            for cik in ciks:
+                                ticker = get_ticker_from_cik(cik)
+                                if ticker:
+                                    processed_dates = set()
+                                    unique_dates = df_num[(df_num['adsh'].str.startswith(cik)) & (~df_num['ddate'].isin(processed_dates))]['ddate'].unique()
+                                    print(f'\n{ticker}: {len(unique_dates)} Dates')
+                                    for date in unique_dates:
+                                        row = {'Date': date,
+                                               'CIK': cik,
+                                               'Ticker': ticker}
+                                        date_df = df_num[(df_num['adsh'].str.startswith(cik)) & (df_num['ddate'] == date)]
+                                        cols = ['EarningsPerShareBasic', 'Liabilities', 'StockholdersEquity', 
+                                                 'NetIncomeLoss', 'Revenues', 'WeightedAverageNumberOfSharesOutstandingBasic', 
+                                                 'CashAndCashEquivalentsAtCarryingValue', 'NetCashProvidedByUsedInOperatingActivities']
+                                        for col in cols:
+                                            row[col] = ''
+                                        for _, row_num in date_df.iterrows():
+                                            if row_num['tag'] in cols:
+                                                curr_row = {
+                                                    'Date': date,
+                                                    'CIK': cik,
+                                                    'Ticker': ticker,
+                                                    'Fundamental': row_num['tag'],
+                                                    'Value': row_num['value'],
+                                                    }
+                                                print(curr_row)
+                                                pd.DataFrame([curr_row]).to_csv(output_filename, mode='a', header=False, index=False)
+                                        # Add the processed date to the set
+                                        processed_dates.add(date)
+    print(f"Complete")
+
+compile_sec_facts()
+Here’s a quick breakdown of the code:
+
+The main function is compile_sec_facts(), which iterates through each ZIP you stored in the sec/ directory, opens num.txt in each ZIP, and finds rows containing data for any of the columns specified.
+Whether we use the Financials Data Set or EDGAR, we’ll have to manage the associations between company tickers and SEC-provided Central Index Keys (CIKs). Download the company_tickers.json file and include the get_ticker_from_cik() function to access it.
+Limitations of SEC Financial Data
+The benefits of using this dataset are already clear. We now have a single source of truth for all publicly-traded companies, relying on no middleman to get it. But there are a couple notes to consider:
+
+Information from 10 thousand companies across 15 years is a lot of data. Maybe too much data for your use case.
+
+In fact, it takes a few days to run to the full script on my laptop. You could cut this down to less than a day by parallelizing with Pyspark, but even then you’ll still end up with an output file with over a million rows. This easily crosses the line into “big data,” so more basic data processing methods may no longer suffice.
+
+So, collect only the data you need: for CAN SLIM screening, you really only need the last 5 years of available data. You might also choose to only look for stocks included in the S&P 500 or NASDAQ for simplicity. Of course, if you’re using ML, you’ll probably need as much data as you can get.
+
+Data is repetitive across company reports, and at times needs to be broken down into more specific columns.
+
+Companies tend to report more than just the current financial values each quarter; as a comparison point we’re often given values for past quarters. This is fine since exact dates are specified and we can simply drop repeats.
+
+But a data integrity issue arises from ambiguity with some item names. There are cases where companies report more than one column value for a single quarter. An example may be for companies operating worldwide, where earnings may be listed once for the U.S. (or even twice for GAAP vs. non-GAAP standards) and again for foreign markets.
+
+Often I’ve found that keeping the first row provided in a file gives an accurate representation of a company’s earnings. This row is more likely to contain the most updated and relevant value.
+
+Conclusion
+Given the ambiguity explained above, it may be necessary to validate our data with a large-language model trained on corresponding 10-Q reports. Clearly, evaluating even the most reliable company data remains a long-term project for me.
+
+In the future, I’ll walk you through how to use our data to run O’Neil’s CAN SLIM screen and find today’s best-performing companies.
+
+Stay tuned, and thanks for following along!

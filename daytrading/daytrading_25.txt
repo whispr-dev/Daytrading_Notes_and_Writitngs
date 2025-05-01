@@ -1,0 +1,146 @@
+Outperforming the Market (1000% in 10 years)
+Blending Momentum and Mean-Reversion scorings
+Sebastien M. Laignel
+Coinmonks
+Sebastien M. Laignel
+
+·
+Follow
+
+Published in
+Coinmonks
+
+·
+6 min read
+·
+Sep 15, 2024
+73
+
+
+
+
+
+
+Published 15th September 2024.
+
+
+By the author with Stable diffusion 3
+Introduction
+In this article, I will introduce a versatile algorithm designed to outperform the market using a simple universe of stocks, approximately comprising the 500 components of the SPY index. Within this universe, aligning with the current paradigms of growth and value investing, some stocks exhibit strong upward trends (the algorithm is long-only), while others demonstrate mean-reverting behaviors, serving as value reserves. These value stocks often provide generous dividends or act as defensive assets during market corrections.
+
+The core idea is to score the stocks based on their momentum or mean-reversion characteristics and select the top N/2 from each category, where N is a diversification parameter. The portfolio is re-balanced monthly.
+
+We will begin by describing the stock universe and setting the benchmark. Following this, we will explain the two scoring systems and discuss the primary advantages of this class of algorithms.
+
+1. Setting the benchmark
+At the time of writing this article, SPY YTD return is 18.24% (Source: FinViz).
+
+2. Defining the universe
+The universe consists of the 500 most liquid U.S. stocks, each priced above $1 to avoid penny stocks. In QuantConnect, I utilize only the coarse selection filter as shown below:
+
+    def CoarseSelectionFunction(self, coarse):
+        if self.Time < self.next_rebalance_time:
+            return Universe.Unchanged
+
+        filtered = filter(lambda x: x.HasFundamentalData and x.Price > 1, coarse)
+        sorted_by_dollar_volume = sorted(filtered, key=lambda x: x.DollarVolume, reverse=True)
+        selected_symbols = [x.Symbol for x in sorted_by_dollar_volume[:500]]
+
+        self.symbols = selected_symbols[:self.number_of_stocks]
+        return self.symbols
+3. Momentum scoring
+To quantify the momentum of a stock, it is sufficient to calculate the return over a specific period passed as parameter.
+
+    def CalculateMomentumScores(self, symbols):
+        scores = {}
+        for symbol in symbols:
+            history = self.History(symbol, self.momentum_period, Resolution.Daily)
+            if not history.empty:
+                momentum = (history["close"][-1] - history["close"][0]) / history["close"][0]
+                scores[symbol] = momentum
+        return scores
+4. Mean-reversion scoring
+The mean-reversion score is derived from the Z-score of a stock’s current price relative to its historical prices. This score quantifies how many standard deviations the current price deviates from the historical mean. A negative Z-score indicates that the stock is trading below its historical average, suggesting a potential for mean reversion, where the stock price might revert to its mean. Conversely, a positive Z-score indicates the price is above the mean. In mean-reversion strategies, stocks with negative Z-scores are considered more attractive as they are expected to revert to their historical average, hence the use of the negative sign in scoring.
+
+    def CalculateMeanReversionScores(self, symbols):
+        scores = {}
+        for symbol in symbols:
+            history = self.History(symbol, self.mean_reversion_period, Resolution.Daily)
+            if not history.empty and len(history["close"]) > 1:
+                rolling_mean = history["close"].mean()
+                rolling_std = history["close"].std()
+                current_price = history["close"][-1]
+                z_score = (current_price - rolling_mean) / rolling_std
+                scores[symbol] = -z_score  # Negative Z-score for mean reversion
+        return scores
+4. Backtesting the trending component
+The below method selects the stocks having the best score in each class. The presence of commented lines are self-explanatory.
+
+    def SelectSymbols(self, momentum_scores, mean_reversion_scores):
+        sorted_momentum = sorted(momentum_scores.items(), key=lambda x: x[1], reverse=True)
+        sorted_mean_reversion = sorted(mean_reversion_scores.items(), key=lambda x: x[1])
+        
+        # Example selection: top N/2 from each strategy
+        top_momentum = {x[0] for x in sorted_momentum[:self.number_of_stocks // 2]}
+        top_mean_reversion = {x[0] for x in sorted_mean_reversion[:self.number_of_stocks // 2]}
+
+        #return top_momentum.union(top_mean_reversion)
+        #return top_mean_reversion
+        return top_momentum
+Below is a backtest of the growth part of the universe.
+
+
+Backtesting the growth component of the stocks universe — Powered by QuantConnect
+Results are pretty good with a Sharpe Ratio of 0.94, a win rate of 65% on 44 trades. By selecting the best performers, the algorithm outperforms SPX.
+
+5. Backtesting the mean-reverting component
+Similarly without changing the parameters, we backtest the algorithm, keeping only the best mean-reverting stocks. Below is the result :
+
+
+Backtesting the value component of the stocks universe — Powered by QuantConnect
+Results are slightly better with a Sharpe ratio at 1.5, with a win rate of 62% on 58 orders.
+
+6. Backtesting the full algorithm
+Without changing the parameters, the algorithm performs slightly worst than the value component.
+
+
+Backtesting the algorithm — Powered by QuantConnect
+7. Extended backtest (10 years)
+Before trying to draw any conclusion, it is interesting to see the behavior of this algorithm over an extended backtesting period:
+
+
+Extended backtest — Powered by QuantConnect
+8. Main take aways
+Scoring systems can outperform the underlying index through either momentum or mean-reversion strategies. Interestingly, the mean-reversion approach tends to outperform the momentum strategy. This suggests that adopting a contrarian stance when buying stocks with significant market capitalization might be advantageous. However, it’s important to note that the universe of stocks in this context is selected based on liquidity rather than market capitalization, so the two sets are not perfectly equivalent.
+
+By combining both momentum and mean-reversion behaviors, the algorithm appears capable of effectively navigating market turbulence. While further analysis is needed to draw definitive conclusions, the current results indicate that this approach is extremely versatile and highly adaptable to various market conditions.
+
+9. Conclusion and future directions
+It is intriguing to consider blending universes that exhibit optimal characteristics for both momentum and mean-reversion strategies. For momentum, one could use the components of ETFs like QQQ or IWO as the base universe. For mean reversion, stocks can be selected based on metrics such as the Piotroski F-score. Parameter optimization can be performed using platforms like QuantConnect to fine-tune the strategy.
+
+Additionally, the scoring systems can be enhanced for better differentiation. For example, incorporating volume analysis on the growth side and applying a volatility filter on the value side can improve the accuracy and effectiveness of the strategy. The split between momentum and mean-reversion (here 1:1) could be also adapted to current market regime.
+
+I assert the originality of the approach presented here, although it is possible that some academic research has touched upon similar concepts. In the near future, I may support this work with existing papers, as I have been extremely concise about the rationale behind the strategy’s efficiency. Notably, most of the code was generated by an AI dual-agent system, which was prompted with the personas of a quantitative developer and a quantitative researcher. I introduced this architecture in my article ‘Dual-Agent and Expert System Design’ at the end of 2023. After 10 iterations, the program was debugged, cleaned, and refined.
+
+To date, I have not deployed this algorithm live, as I currently use other algorithms better suited for higher-frequency trading. However, this algorithm could be utilized to generate long-term trading signals from an investment perspective. It is impressive what we can do with 107 lines of code in QuantConnect.
+
+If you found this article valuable, please show your support by clapping and leaving a comment. Thank you for reading!
+
+Disclaimer : This article is for educational purposes only and is not financial or investment advice. Strategies discussed, including the Adaptive Laguerre Filter, are not guaranteed to be profitable. Financial markets are risky, and past performance does not predict future results. The author and publisher are not responsible for any losses or damages from using this information. By reading this article, you agree that you are solely responsible for your investment decisions.
+
+Happy trading and coding.
+
+Sebastien LAIGNEL
+
+References :
+QuantConnect - Open Source Algorithmic Trading Platform
+QuantConnect is the world's leading open-source, multi-asset algorithmic trading platform, chosen by thousands of funds…
+www.quantconnect.com
+
+FINVIZ.com - Stock Screener
+Stock screener for investors and traders, financial visualizations.
+finviz.com
+
+A Message from InsiderFinance
+
+Thanks for being a part of our community! Before you go:

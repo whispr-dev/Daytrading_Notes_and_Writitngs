@@ -1,0 +1,159 @@
+💧 Section 2: Amihud Illiquidity Alpha — Trading the Cost of Moving Markets
+✦ What Is Amihud Illiquidity?
+In simple terms:
+
+Amihud Illiquidity = “How much does the price move when someone trades $1 of volume?”
+
+It’s a ratio:
+
+Amihud
+𝑡
+=
+∣
+Return
+𝑡
+∣
+Volume
+𝑡
+Amihud 
+t
+​
+ = 
+Volume 
+t
+​
+ 
+∣Return 
+t
+​
+ ∣
+​
+ 
+The higher this number, the more price impact per dollar traded — i.e. the less liquid the asset.
+
+Why does this matter?
+Higher illiquidity often means higher future returns (as per Amihud’s research)
+
+Illiquidity is priced into the market as a risk premium
+
+You can build alpha by sorting assets by Amihud and longing the most illiquid
+
+🛠️ Let’s Code It
+📄 strategies/amihud_illiquidity.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Download data
+ticker = "NVDA"
+df = yf.download(ticker, start="2023-01-01", end="2024-01-01")
+
+# Calculate returns
+df['Return'] = df['Adj Close'].pct_change()
+
+# Calculate Amihud Illiquidity
+df['Amihud'] = df['Return'].abs() / df['Volume']
+df['Amihud'] = df['Amihud'].rolling(window=5).mean()  # smoother
+
+# Visualize
+plt.figure(figsize=(12, 6))
+plt.subplot(2,1,1)
+plt.plot(df['Adj Close'], label="Price")
+plt.title(f"{ticker} Price")
+plt.subplot(2,1,2)
+plt.plot(df['Amihud'], label="Amihud Illiquidity", color="purple")
+plt.title("5-Day Rolling Amihud Illiquidity")
+plt.tight_layout()
+plt.show()
+💡 How to Use It
+Here’s how you can turn Amihud into signals:
+
+High Amihud:
+
+Volatility is expensive
+
+Expect stronger reversals
+
+Mean-reversion systems shine
+
+Low Amihud:
+
+Volatility is cheap
+
+Breakouts may follow
+
+Momentum systems are safer
+
+You can:
+
+Rank stocks by Amihud
+
+Build a long/short basket:
+
+Long top 10% Amihud (illiquid)
+
+Short bottom 10% Amihud (liquid)
+
+Backtest monthly rebalancing
+
+🧠 Pro Tip: Relative Amihud
+Sometimes absolute values are noisy. Try normalizing per stock:
+
+RelAmihud
+𝑡
+=
+Amihud
+𝑡
+Median Amihud (1yr)
+RelAmihud 
+t
+​
+ = 
+Median Amihud (1yr)
+Amihud 
+t
+​
+ 
+​
+ 
+That way you get a Z-score of illiquidity over time for each stock.
+
+✨ Bonus: Add to Screener
+📄 screeners/amihud_screener.py
+
+python
+Copy
+Edit
+def get_amihud_score(ticker):
+    df = yf.download(ticker, period="1y")
+    df['Return'] = df['Adj Close'].pct_change()
+    df['Amihud'] = df['Return'].abs() / df['Volume']
+    return df['Amihud'].rolling(5).mean().iloc[-1]
+You can plug this into a batch S&P 500 screener and sort by illiquidity to find candidates for reversion or volatility plays.
+
+🧪 Next-Level Idea: Volatility Regime Switching
+Combine Amihud with ATR or Bollinger bandwidth to determine volatility state + liquidity state.
+
+Example:
+
+High ATR + High Amihud = Dangerous zone → fade fake breakouts
+
+Low ATR + Low Amihud = Dead zone → wait or deploy mean scalper
+
+✦ Coming Up Next: Cointegration for Pairs Trading
+In Section 3, we’ll:
+
+Ditch correlation and embrace cointegration
+
+Find stationary spreads for long/short pairs
+
+Use statsmodels to test cointegration
+
+Create a spread reversion backtest
+
+This is the bread and butter of statistical arbitrage, and your first real quant signal.

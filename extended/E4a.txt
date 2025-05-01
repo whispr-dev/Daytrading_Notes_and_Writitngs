@@ -1,0 +1,42 @@
+Chapter 4: Monte Carlo Simulation for Trading Risk Estimation
+You've built a model. You've tested it on historical data. It looks great. But here’s the dirty secret of backtesting:
+
+Past performance isn’t just no guarantee of future results — it may have been a total accident.
+
+To know whether your model is robust, you need to throw it into a thousand alternate timelines and see if it still survives. That’s what Monte Carlo simulation is for — and it’s one of the most underrated tools in your quiver.
+
+🎲 What Is Monte Carlo Simulation?
+It’s a way to simulate future price paths using randomized returns, volatility shocks, or bootstrap sampling, then run your strategy across each one.
+
+It answers questions like:
+
+What’s the worst-case drawdown I could face?
+
+How often does my strategy blow up vs win?
+
+What’s the probability of a 20% gain over 6 months?
+
+🔍 Method 1: Historical Bootstrapping
+Use actual returns — shuffled or resampled — to simulate alternate futures.
+
+python
+Copy
+Edit
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+returns = df['Close'].pct_change().dropna().values
+start_price = df['Close'].iloc[-1]
+
+simulations = []
+n_paths = 1000
+n_days = 252
+
+for _ in range(n_paths):
+    sampled_returns = np.random.choice(returns, size=n_days, replace=True)
+    path = start_price * np.cumprod(1 + sampled_returns)
+    simulations.append(path)
+
+# Plot
+plt.figure(figsize

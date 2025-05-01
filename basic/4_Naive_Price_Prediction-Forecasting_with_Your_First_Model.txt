@@ -1,0 +1,159 @@
+🔮 The Beginner's Blueprint to Day Trading with Python
+Part 4: Naive Price Prediction — Forecasting with Your First Model
+✦ What’s a Naive Model?
+Before you build an AI trader or some brain-melting ensemble strategy... try this:
+
+“Tomorrow’s price will be the same as today’s.”
+
+That’s it. It’s called a naive forecast.
+
+Why use it?
+
+It sets a baseline.
+
+If you can't beat the naive model, your fancy model ain't worth deploying.
+
+You'd be surprised how close naive models come in short-term markets.
+
+🧠 The Plan
+We're going to:
+
+Pull data from Yahoo Finance (META)
+
+Predict that the next day’s price = today’s price
+
+Calculate error metrics (MAE, RMSE, MAPE, SMAPE, R²)
+
+Plot true vs predicted prices
+
+🧪 Full Python Script: Naive Prediction
+📄 strategies/naive_forecast.py
+
+python
+Copy
+Edit
+import numpy as np
+import pandas as pd
+import yfinance as yf
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# 1. Get data
+ticker = 'META'
+df = yf.download(ticker, start='2016-01-01', end='2024-01-01')
+
+# 2. Create 'Target' (t+1 close)
+df['Target'] = df['Close'].shift(-1)
+
+# 3. Naive prediction: Next day’s close = today’s close
+df['Naive_Pred'] = df['Close']
+
+# 4. Drop last row (Target = NaN due to shift)
+df.dropna(inplace=True)
+
+# 5. Metrics
+y_true = df['Target']
+y_pred = df['Naive_Pred']
+
+mae = mean_absolute_error(y_true, y_pred)
+rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+smape = np.mean(np.abs(y_true - y_pred) / ((np.abs(y_true) + np.abs(y_pred)) / 2)) * 100
+r2 = r2_score(y_true, y_pred)
+
+# 6. Results
+print(f"Metrics for Naive Forecast on {ticker}")
+print(f"MAE   : {mae:.4f}")
+print(f"RMSE  : {rmse:.4f}")
+print(f"MAPE  : {mape:.2f}%")
+print(f"SMAPE : {smape:.2f}%")
+print(f"R²    : {r2:.4f}")
+
+# 7. Plot
+plt.figure(figsize=(12, 6))
+plt.plot(df.index, y_true, label='Actual')
+plt.plot(df.index, y_pred, label='Naive Prediction', linestyle='--')
+plt.title(f'Naive Forecast vs Actual for {ticker}')
+plt.legend()
+plt.tight_layout()
+plt.savefig('naive_vs_actual.png')
+plt.show()
+📊 Sample Output (Approximate)
+yaml
+Copy
+Edit
+Metrics for Naive Forecast on META
+MAE   : 3.2627
+RMSE  : 5.1256
+MAPE  : 1.32%
+SMAPE : 1.30%
+R²    : 0.9987
+What does this mean?
+
+MAE (Mean Absolute Error): On average, you’re off by $3.26 per prediction.
+
+RMSE (Root Mean Square Error): Slightly penalizes bigger errors more — gives a sense of volatility.
+
+MAPE / SMAPE: Percentage-based — very useful when comparing across stocks with different prices.
+
+R² Score: Close to 1 = tight fit (which is expected when predicting tomorrow using today).
+
+💡 Why This Matters
+The naive forecast looks stupid — but it’s a shockingly strong baseline.
+
+In efficient markets, price tomorrow is often strongly correlated with today.
+
+Any future model you write should try to beat this baseline in MAE, RMSE, and R².
+
+Don't underestimate stupidly simple models. They keep you honest.
+
+📘 Extra: Turn This Into a Mini Function
+Want to forecast any stock? Wrap it into a function:
+
+📄 strategies/naive_forecast_function.py
+
+python
+Copy
+Edit
+def evaluate_naive(ticker, start='2020-01-01', end='2024-01-01'):
+    import yfinance as yf
+    import pandas as pd
+    import numpy as np
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+    df = yf.download(ticker, start=start, end=end)
+    df['Target'] = df['Close'].shift(-1)
+    df['Naive_Pred'] = df['Close']
+    df.dropna(inplace=True)
+
+    y_true = df['Target']
+    y_pred = df['Naive_Pred']
+
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    r2 = r2_score(y_true, y_pred)
+
+    print(f"{ticker} | MAE: {mae:.2f} | RMSE: {rmse:.2f} | R²: {r2:.4f}")
+Then just call:
+
+python
+Copy
+Edit
+evaluate_naive("AAPL")
+evaluate_naive("TSLA")
+evaluate_naive("AMZN")
+📉 What's Next?
+We’ve built our first prediction model.
+
+In Part 5, we’ll:
+
+Overlay indicators like EMA, RSI, and MACD on price charts
+
+Use plotly to build stunning visualizations
+
+See how traders combine signals visually before making decisions
+
+Add volume + sentiment data on top for context
+
+This will be your first real strategy exploration — not just price mimicry.
+

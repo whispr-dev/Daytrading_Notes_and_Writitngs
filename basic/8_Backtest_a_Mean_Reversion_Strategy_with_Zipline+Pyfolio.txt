@@ -1,0 +1,172 @@
+📈 The Beginner's Blueprint to Day Trading with Python
+**Part 8: Backtest a Mean Reversion Strategy with Zipline + Pyfolio
+✦ What Is Backtesting?
+Backtesting is like running your strategy in a time machine:
+
+"What would have happened if I used this strategy in 2010?"
+
+It lets you:
+
+Simulate real trading over historical data
+
+Catch bugs or overfitting
+
+See how you'd actually perform
+
+Visualize returns, drawdown, Sharpe ratio, and more
+
+✦ What is Mean Reversion?
+Mean reversion assumes prices eventually return to their "average" (mean).
+
+Simple logic:
+
+If a stock has dropped too far too fast, it's likely to bounce
+
+If it's soared, it's likely to cool off
+
+✦ Strategy Logic: Buy the Dips
+We’ll:
+
+Measure how far a stock is from its mean using a custom factor
+
+Go long on oversold stocks
+
+Rebalance weekly
+
+Use realistic commission/slippage
+
+💾 Install Required Tools
+If you haven’t already:
+
+bash
+Copy
+Edit
+pip install zipline-reloaded pyfolio
+Then set up Zipline's bundle:
+
+bash
+Copy
+Edit
+zipline ingest -b quantopian-quandl
+(You only need to ingest once. If it fails, we can swap in a local CSV loader later.)
+
+📄 Full Python Script: Mean Reversion Backtest
+📄 backtests/mean_reversion_zipline.py
+
+python
+Copy
+Edit
+import pandas as pd
+import numpy as np
+from zipline.api import (
+    order_target_percent, record, symbol,
+    schedule_function, date_rules, time_rules,
+    set_commission, set_slippage
+)
+from zipline import run_algorithm
+from zipline.finance import commission, slippage
+from datetime import datetime
+from pytz import UTC
+
+def initialize(context):
+    context.asset = symbol('AAPL')
+    set_commission(commission.PerShare(cost=0.001))
+    set_slippage(slippage.VolumeShareSlippage(volume_limit=0.01, price_impact=0.02))
+
+    schedule_function(rebalance,
+                      date_rules.week_start(),
+                      time_rules.market_open())
+
+def rebalance(context, data):
+    price = data.current(context.asset, 'price')
+    hist = data.history(context.asset, 'price', 21, '1d')
+    mean = hist.mean()
+    std = hist.std()
+
+    z_score = (price - mean) / std
+
+    # If Z < -1, price is "too low" → buy
+    if z_score < -1:
+        order_target_percent(context.asset, 1.0)
+    # If Z > +1, price is "too high" → sell
+    elif z_score > 1:
+        order_target_percent(context.asset, 0.0)
+
+    record(price=price, z=z_score)
+
+def analyze(context, perf):
+    import matplotlib.pyplot as plt
+    perf.index = perf.index.tz_convert('UTC')
+    perf['portfolio_value'].plot(title='Portfolio Value')
+    plt.tight_layout()
+    plt.show()
+
+start = pd.Timestamp('2010-01-01', tz=UTC)
+end   = pd.Timestamp('2020-01-01', tz=UTC)
+
+results = run_algorithm(start=start, end=end,
+                        initialize=initialize,
+                        analyze=analyze,
+                        capital_base=100000,
+                        data_frequency='daily',
+                        bundle='quantopian-quandl')
+📊 What You Get
+Weekly rebalance based on Z-score
+
+Realistic trading costs (commission + slippage)
+
+Plot of your portfolio over 10 years
+
+🔬 Analyze Risk + Return with Pyfolio
+Let’s dig into how the strategy performed beyond just money.
+
+📄 backtests/analyze_pyfolio.py
+
+python
+Copy
+Edit
+import pyfolio as pf
+
+# Make sure you ran: `run_algorithm()` and stored result as `results`
+returns = results.portfolio_value.pct_change().dropna()
+
+pf.create_full_tear_sheet(returns)
+This generates a full HTML-style breakdown:
+
+Cumulative returns
+
+Volatility
+
+Drawdowns
+
+Sharpe/Sortino ratios
+
+Monthly returns heatmap
+
+Daily value-at-risk
+
+🧠 How to Improve This Strategy
+Use a universe of stocks, not just AAPL
+
+Add volume filters
+
+Incorporate RSI or MACD
+
+Try a momentum strategy instead of mean reversion
+
+Test with different rebalancing windows
+
+Want to build a multi-stock pipeline strategy next? Just say so!
+
+✦ Coming Up Next: Browser-Based Trade Automation
+In Part 9, we’ll:
+
+Automate Fidelity login with Python + Shortkeys
+
+Simulate secure keyboard inputs (no Selenium!)
+
+Build a real “watch + act” trading bot
+
+Handle dynamic stop losses and alerts
+
+This is the bridge to real execution.

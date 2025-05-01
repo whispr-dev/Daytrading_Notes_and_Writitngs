@@ -1,0 +1,140 @@
+Mastering Day Trading with LSTM: Predicting the Next 10 Minutes 📉🔮
+Unicorn Day
+Unicorn Day
+
+·
+Follow
+
+4 min read
+·
+Aug 16, 2024
+51
+
+
+
+
+
+
+Day trading… It’s fast-paced, thrilling, and potentially very profitable. But what if you could take it up a notch by predicting the next 10 minutes of stock prices? Imagine having a crystal ball 🧙‍♂️ that gives you a sneak peek into the immediate future. Today, we’re diving into the world of Long Short-Term Memory (LSTM) networks to help day traders like you stay ahead of the curve… 📈✨
+
+🌟 Today’s Game Plan:
+In this article, we’ll explore how to:
+
+Fetch Intraday Stock Data 🕒
+Train a LSTM Model to Predict Short-Term Movements 🧠
+Visualize the Next 10 Minutes of Prices 🔮
+Incorporate a Winning Trading Strategy 💰
+Let’s not waste any more time — let’s get started!
+
+🕒 Fetching Intraday Stock Data for Day Trading
+Day traders need up-to-the-minute data. We’ll start by fetching Apple Inc.’s (AAPL) intraday price data at 1-minute intervals. The goal? To predict the next 10 minutes based on recent price movements…
+
+import yfinance as yf
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+
+# Fetch intraday data for Apple Inc. (AAPL)
+ticker = yf.Ticker("AAPL")
+stock_data = ticker.history(period="1d", interval="1m")
+stock_data = stock_data[['Close']]
+stock_data.reset_index(inplace=True)
+
+# Normalize the 'Close' prices
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(stock_data[['Close']])
+🤖 Training the LSTM Model to Predict Price Movements
+Day trading success relies on split-second decisions… 🕒 Here’s where our LSTM model comes in. We’ll train it using sequences of the last 10 minutes of price data to forecast the price for the next minute. Then, we’ll predict for the next 10 minutes — because every minute counts!
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.optimizers import Adam
+from sklearn.model_selection import train_test_split
+
+# Create sequences
+def create_sequences(data, seq_length):
+    X, y = [], []
+    for i in range(len(data) - seq_length):
+        X.append(data[i:(i + seq_length), 0])
+        y.append(data[i + seq_length, 0])
+    return np.array(X), np.array(y)
+
+sequence_length = 10
+X, y = create_sequences(scaled_data, sequence_length)
+
+# Split into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+# Build LSTM model
+model = Sequential([
+    LSTM(50, return_sequences=True, input_shape=(sequence_length, 1)),
+    LSTM(50, return_sequences=False),
+    Dense(25),
+    Dense(1)
+])
+
+model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
+history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, verbose=1)
+🔮 Predicting the Next 10 Minutes
+Now for the critical part… 🧐 We’ll use our model to predict the next 10 minutes of stock prices, a key window for day traders to make informed buy or sell decisions.
+
+# Prepare data for prediction
+last_sequence = scaled_data[-sequence_length:]
+last_sequence = np.reshape(last_sequence, (1, sequence_length, 1))
+
+# Predict next 10 minutes
+predictions = []
+for _ in range(10):
+    next_price = model.predict(last_sequence)
+    predictions.append(next_price[0][0])
+    last_sequence = np.concatenate((last_sequence[:, 1:, :], np.reshape(next_price, (1, 1, 1))), axis=1)
+
+# Inverse transform the predictions
+predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
+📈 Visualizing Predictions: Plan Your Trade
+Here’s where the rubber meets the road… 🏎️ We visualize the predictions alongside actual data, showing you exactly where the price is headed in the next 10 minutes.
+
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+# Generate future timestamps
+future_dates = pd.date_range(start=stock_data['Datetime'].iloc[-1] + pd.Timedelta(minutes=1), periods=10, freq='T')
+
+# Create DataFrame for predictions
+predictions_df = pd.DataFrame({
+    'Datetime': future_dates,
+    'Predicted': predictions
+})
+
+# Plot the results
+plt.figure(figsize=(14, 7))
+plt.plot(stock_data['Datetime'], stock_data['Close'], label='Actual Prices')
+plt.plot(predictions_df['Datetime'], predictions_df['Predicted'], color='red', marker='o', linestyle='--', label='Predicted Prices')
+plt.xlabel('Time')
+plt.ylabel('Stock Price')
+plt.title('LSTM Model - Intraday Actual vs Predicted Prices for Next 10 Minutes')
+plt.legend()
+
+# Format x-axis to show hours only
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:00'))
+plt.gca().xaxis.set_major_locator(mdates.HourLocator(interval=1))
+plt.gcf().autofmt_xdate()  # Rotation
+
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.show()
+💰 Incorporating a Winning Trading Strategy
+Predictions are just the beginning… To truly profit as a day trader, you need a solid strategy. Here’s a simple yet powerful approach:
+
+Buy Signal: If the predicted price for the next minute is higher than the current price by a certain threshold, it could be a buying opportunity.
+Sell Signal: Conversely, if the predicted price is lower, consider selling before the dip. 🛑
+This strategy can be refined by adding filters like moving averages or RSI (Relative Strength Index) for better decision-making.
+
+🚀 Conclusion
+Day trading is a high-stakes game, but with the right tools — like an LSTM model — you can gain the upper hand… 🧠🔮 Whether you’re looking to scalp quick profits or avoid pitfalls, predicting the next 10 minutes of price action can be a game-changer.
+
+Curious about the full code? You can explore and run the notebook yourself here: Google Colab Link 🎓.
+
+So, are you ready to take your day trading to the next level? Give it a try and share your experiences below! 🤑⬇️

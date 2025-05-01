@@ -1,0 +1,180 @@
+📈 The Beginner's Blueprint to Day Trading with Python
+Part 5: Visualizing the Market — Indicators That Guide Strategy
+✦ Why Visuals Matter in Trading
+No matter how good your math is, your brain sees patterns faster than it calculates them.
+
+Overlaying price with indicators gives you an intuitive feel for:
+
+Trends forming or reversing
+
+Momentum surging or fading
+
+Whether a stock is overbought/oversold
+
+Breakouts and traps
+
+We’ll use plotly for clean, interactive charting.
+
+✦ The Indicators We’ll Use
+EMA (Exponential Moving Average)
+Smoothed average over time
+
+EMA(9): Short-term
+
+EMA(21): Mid-term
+Crossovers are often buy/sell signals.
+
+RSI (Relative Strength Index)
+Momentum gauge on a 0–100 scale
+
+70: Overbought
+
+<30: Oversold
+
+MACD (Moving Average Convergence Divergence)
+A trend-following momentum indicator
+
+Two EMAs and their difference
+
+Crossovers signal shifts
+
+Volume
+Validates moves: big price moves with low volume? Suspicious.
+
+🔧 Full Python Script: Price + EMA + RSI + MACD + Volume
+📄 core_concepts/full_indicator_overlay.py
+
+python
+Copy
+Edit
+import yfinance as yf
+import pandas as pd
+import plotly.graph_objects as go
+
+# 1. Load data
+ticker = "AAPL"
+df = yf.download(ticker, start="2023-01-01", end="2024-01-01", interval="1d")
+df.dropna(inplace=True)
+
+# 2. Calculate EMAs
+df['EMA9'] = df['Close'].ewm(span=9).mean()
+df['EMA21'] = df['Close'].ewm(span=21).mean()
+
+# 3. Calculate RSI
+delta = df['Close'].diff()
+gain = delta.clip(lower=0)
+loss = -delta.clip(upper=0)
+avg_gain = gain.rolling(window=14).mean()
+avg_loss = loss.rolling(window=14).mean()
+rs = avg_gain / avg_loss
+df['RSI'] = 100 - (100 / (1 + rs))
+
+# 4. Calculate MACD
+ema12 = df['Close'].ewm(span=12).mean()
+ema26 = df['Close'].ewm(span=26).mean()
+df['MACD'] = ema12 - ema26
+df['Signal'] = df['MACD'].ewm(span=9).mean()
+
+# 5. Plot Price + EMAs
+fig = go.Figure()
+
+fig.add_trace(go.Candlestick(
+    x=df.index,
+    open=df['Open'],
+    high=df['High'],
+    low=df['Low'],
+    close=df['Close'],
+    name='Price'
+))
+
+fig.add_trace(go.Scatter(x=df.index, y=df['EMA9'], mode='lines', name='EMA 9'))
+fig.add_trace(go.Scatter(x=df.index, y=df['EMA21'], mode='lines', name='EMA 21'))
+
+fig.update_layout(title=f"{ticker} Price + EMA", xaxis_rangeslider_visible=False)
+
+fig.show()
+📊 Add RSI and MACD Plots
+📄 core_concepts/rsi_macd_plot.py
+
+python
+Copy
+Edit
+import plotly.subplots as sp
+
+# Subplots: (Price + EMA), RSI, MACD
+fig = sp.make_subplots(rows=3, cols=1, shared_xaxes=True,
+    vertical_spacing=0.05, row_heights=[0.5, 0.25, 0.25],
+    subplot_titles=("Price + EMA", "RSI", "MACD"))
+
+# Price + EMA
+fig.add_trace(go.Candlestick(
+    x=df.index,
+    open=df['Open'],
+    high=df['High'],
+    low=df['Low'],
+    close=df['Close'],
+    name='Price'), row=1, col=1)
+
+fig.add_trace(go.Scatter(x=df.index, y=df['EMA9'], name='EMA 9'), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df['EMA21'], name='EMA 21'), row=1, col=1)
+
+# RSI
+fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI'), row=2, col=1)
+fig.add_hline(y=70, line_dash="dot", line_color="red", row=2, col=1)
+fig.add_hline(y=30, line_dash="dot", line_color="green", row=2, col=1)
+
+# MACD
+fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD'), row=3, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name='Signal'), row=3, col=1)
+
+fig.update_layout(height=800, title_text=f"{ticker} Price + Indicators")
+fig.show()
+🔥 Example Insights You Can Now See
+When RSI crosses below 30 → potential bounce opportunity
+
+When MACD crosses signal line up → potential entry
+
+When EMA9 crosses EMA21 upward → bullish trend forming
+
+If price breaks out with high volume → strength confirmed
+
+You’ve now built the foundation for indicator-based strategies.
+
+✨ Bonus: Add Volume Bars Below the Price
+📄 core_concepts/price_with_volume.py
+
+python
+Copy
+Edit
+fig = sp.make_subplots(rows=2, cols=1, shared_xaxes=True,
+                       row_heights=[0.8, 0.2], vertical_spacing=0.05)
+
+# Price
+fig.add_trace(go.Candlestick(
+    x=df.index,
+    open=df['Open'],
+    high=df['High'],
+    low=df['Low'],
+    close=df['Close'],
+    name='Price'), row=1, col=1)
+
+# Volume
+fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Volume'), row=2, col=1)
+
+fig.update_layout(height=700, title_text="Price with Volume")
+fig.show()
+✦ Coming Up Next: Build a Custom Screener
+In Part 6, we’ll:
+
+Load a list of S&P500 stocks
+
+Use yfinance to pull data for each
+
+Classify them by market cap (nano → mega)
+
+Add logic to sort by price position (e.g. near 52-week high)
+
+Export all results to Excel/CSV
+
+You’ll basically have your own Finviz… for free.
+

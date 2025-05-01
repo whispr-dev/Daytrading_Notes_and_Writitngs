@@ -1,0 +1,88 @@
+I built a Trading Bot…Now what?
+Stefan Stapinski
+Pollen: Market Trading Bot
+Stefan Stapinski
+
+·
+Follow
+
+Published in
+Pollen: Market Trading Bot
+
+·
+8 min read
+·
+Aug 9, 2024
+62
+
+
+
+
+
+
+I built an automated trading bot that now runs my entire stock market and crypto portfolio. It’s been a wild two-year ride, and I’m at a crossroads wondering what’s next. Join me on this adventure — I’ll share some do’s and don’ts that might save you from pitfalls in your own software-building journey. Oh, and you can also run this bot locally if you’re up for it!
+
+When I started, I had grand fantasies of fast money, launching a company, creating an empire, and maybe — just maybe — buying a house. Well, I did make some fast money, the company never materialized, no empire to speak of, but hey, I got the house! So, not bad, right? Now, I’m reflecting on where to go from here, and honestly, I’m seeking some guidance and maybe even a little help.
+
+I’ve shown my app to friends and family. One hedge fund quant told me to raise some money and start a company. They were all pretty impressed, but in the end, it’s just me — solo — deciding the next move. I’ve got a full-time job and a family with two kids, so taking a big risk on this bot isn’t in the cards right now. Call me a scaredy-cat, and I won’t argue — I’m pretty risk-averse. Maybe one day I’ll take the plunge, but today, I’m sharing this with the community. Who knows? Maybe one of you will want to take it further.
+
+Fair warning: I’m not your typical engineer. No formal education here — Stack Overflow has been my bible (thank you, Stack Overflow!). So, my code… well, let’s just say it’s not winning any beauty contests.
+
+I’ve got a finance background and after 20 years of trading, I’ve learned that no strategy lasts forever. I firmly believe in the random walk of Wall Street — “If you’re not Oppenheimer or Renaissance, you’re just lucky.” Trading is fun, but I’m really bad at it — the emotional rollercoaster is not my thing. One day, after yet another failed options bet (love you, TSLA), I realized: Robot Me would be an excellent trader!
+
+So, I decided to build a bot to handle all my trading and make me tons of MONEY!!! Fast forward to today, and I’ve got a local app that had some bumps but is finally starting to do well by me. 🙂 But, let’s be real: Buying and holding the VTI is hard to beat. We’ll see how next year goes!
+
+What’s Pollen, Anyway? The Trading Bot App
+
+In the simplest terms, I built a trading bot using Python. FastAPI for the backend, Streamlit for the frontend. Yes, I know you quants might be giving me the side-eye, but hey — I’m a self-made quasi-engineer.
+
+Pollen creates an allocation based on weighted measurements of prices (currently using MACD, RSI, and VWAP). You can apply different models, but that’ll require some building. I based mine on the notion of gravity (everything returns to the mean). Pollen handles two brokers (Alpaca and Robinhood). Just give the bot your Alpaca API keys and let it do the rest. Pollen’s current state is meant for accounts with $25k or more, but with a small update (don’t ask me 😛), it could handle $100 accounts.
+
+Measure Twice, Cut Once
+
+Building Pollen has been a mix of fun and hair-pulling moments. I did a bit of research on algo trading (wow, there are a lot of algo traders out there!) and found a cool company with a Python SDK — Alpaca. With a Slack channel full of helpful folks, I started building my bot… without measuring well enough. I ended up with a ton of messy code, learning the hard way that less is more. Not having a CS background didn’t help either — I chose speed over stability and used pickle files for my databases (I thought switching database schemas would be easy… said no one ever).
+
+After getting a prototype up and running, I sought help from developers via Upwork. Turns out, I was probably doing everything wrong. Unfortunately, the advice I received, though well-intentioned, didn’t lead to successful implementations. I got burned a lot and ended up developing things myself or fixing their work. It was challenging to manage each developer while working alongside them, all while juggling a full-time day job. I now understand the value of product and program managers.
+
+It wasn’t all bad though — I learned a lot, including VM-Linux, React, Docker, Airflow, AWS, APIs, and databases (Mongo, Postgres). So, the money was still well spent on my education. 😊
+
+The moral of the story? Measure your idea, then measure your goals, then measure again. Get some sound advice, and then cut.
+
+Know Your Tech Stack! Avoid Shortcuts, and Please, Use a Real Database
+
+When starting any project, choosing the right tech stack is crucial. Backend and frontend may be just two words, but the systems you choose can make or break your app.
+
+Since my engineering knowledge came from Googling how-to-dos and always landing on Stack Overflow, I never really learned the best practices. As the build got bigger, I slowed down. My databases are still running on local pickle files (YIKES!!!). I do have a branch to migrate to Postgres, but as always… who has the time? Not me! 😄 Be careful about the languages you choose for your front and back end. The options are overwhelming, and with new ones popping up every day, it can be tough to decide. For me, Python was a no-brainer — it’s one of the fastest-growing languages with a huge community. Today, with GPT by your side, I might have chosen differently, but I still enjoy Python.
+
+Sharing is Caring
+
+I finally have a product I’m ready to share with the community, and I’m curious to see if anyone out there wants to contribute. Fair warning: The code is messy, the setup might be tricky, and you will cringe if you peek at the source code. I originally built this app for myself and almost entirely by myself. I thought maybe, just maybe, I’d turn it into something one day. But without money and a team, that’s not happening. So, my next step is to share it in hopes of finding some like-minded folks who want to improve Pollen. It’s a diamond in the rough, but a diamond in returns.
+
+Let’s take a look at the app, and you can follow the README on GitHub to set it up: https://github.com/nafets33/pollen.
+
+Let’s set up our portfolio! You’ll want to select the symbols you want to trade and set your desired model and allocations. 🙂 You might notice Warren Buffet as an option — unless you’re too busy checking out the Chess Theme Options. This feature never got fully developed, but the idea was to select a famous investor, and your board and allocations would be preset based on their latest portfolio.
+
+
+I liked the idea of grouping tickers to share budget allocations, I still enjoy the idea, but I still would like an easier way to change the allocations between the groups. I have a couple of ideas on allowing the bot to reallocate the Budget based on what symbols are performing but alas that is for another day.
+
+My Morning Cup of Coffee
+
+
+I used to day trade with Pollen but I only seemed to lose money on my trades whereas Pollen Since Jan24, across all trades, has averaged 43% gain. Now as wonderful as that sounds, and it’s not too shabby, the hard part is capitalizing on the highest gains (i.e. allocate funds to the best trades, easier said than done right) It is a game of numbers and luck, I’m happy to play the game and hope I get luckier. Pollen manages the trade based on the timeframes, the settings are preset for each timeframe, for example, if I buy the Flash the settings are preset to try and sell out by EOD, whereas if I buy the Year, Pollen treats the trade as a long-term buy. See below the options you have when you click on AZN Flash button.
+
+
+One big problem I have is that my allocations move too fast and Pollen ends up selling/buying, it’s a HF trading machine (it traded 53M last year) and I’m still working to slow down and keep allocations from moving too drastically in short periods. However, I plan to add a toggle for each ticker group on the board that enables Pollen to place buy/sell orders for people who may be too scared to allow it to start trading. However, since Alpaca has a sandbox account, you can run on the sandbox account to see how it operates before having it trade real monies.
+
+You’ll also notice the columns labeled “forces,” these represent the weighted prices across different time frames: SHORT, MID, and LONG. These Force numbers reflect the weighted averages of the prices using MACD, VWAP, and RSI. The Trinity Force (Trinity==3) is the average of these three Forces. I’ve configured the bot to consider these Forces when trading. However, the bot uses much more proprietary knowledge beyond this. For example, it also considers each wave of buys and sells, profits and losses, and the overall portfolio before making a trade. There is a waterfall of considerations Pollen makes before placing a trade and I’m working to make it smarter.
+
+Home sweet Home
+I run Pollen out of my Garage, which I make-shifted into a home office…shhh don’t tell my property manager. I’m home now trying to figure out what my next move should be. I will continue to work on Pollen as I have entrusted it to handle my stock/crypto trades but I’m getting older and have become wary of staring at lines of code trying to solve the matrix of the Market when in reality I still believe the random walk is the best way to go (for stress levels alone). If anyone out there would want to consider taking on the challenge of running Pollen and possibly improving it, I’ll be here to help.
+
+Current Issues & Bugs
+Fair Warning, as I mentioned before I’m self-taught by Stackover-flow so you will likely cringe at my code, I’ve never worked a dev job before.
+
+It will trade based on the allocations you give it..this isn’t an issue, this is a warning
+
+For Real-Time Quotes, you will need to upgrade Alpaca data provider plan 99/month OR you can use your own 3p source, to provide price data. It’s an ~easy config to swap out. Otherwise, you are subjected to Delayed prices, as the Alpaca Free plan caps you on how many API calls you can make in a minute. The ticker data is run locally as well but I might set a server to host the data, which you can tag along and call my server (for a small fee of course)
+
+This is my journey and I am very grateful for all that has happened. If I could be an inspiration to anyone or help anyone through there's, this I would appreciate. Always Bee Better.

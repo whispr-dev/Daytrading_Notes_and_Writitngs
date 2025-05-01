@@ -1,0 +1,159 @@
+🧠 Section 8: Stacked LSTM Forecasting — Deep Memory, Future Vision
+✦ What is a Stacked LSTM?
+LSTM = Long Short-Term Memory network
+
+Designed for sequential data like prices
+
+Handles long-term dependencies
+
+Stacked LSTM = Multiple LSTM layers stacked
+
+Allows more abstract sequence patterns to emerge
+
+Better performance with complex features
+
+Think of each layer as watching time unfold, with deeper layers focusing on broader patterns.
+
+✦ Forecasting Task
+We’ll:
+
+Predict the next-day return direction (binary)
+
+Use engineered features:
+
+Lagged returns
+
+RSI, MACD, volatility
+
+Amihud
+
+Train on sequences of 30 days per sample
+
+📄 Data Preparation
+📄 models/lstm_prepare_data.py
+
+python
+Copy
+Edit
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+
+df = pd.read_csv("trend_labeled_data.csv")
+features = ['Lag1', 'Lag2', 'STD5', 'RSI', 'MACD_hist', 'Amihud']
+target = 'Target'
+
+scaler = MinMaxScaler()
+X_scaled = scaler.fit_transform(df[features])
+
+sequence_length = 30
+X, y = [], []
+for i in range(sequence_length, len(X_scaled)):
+    X.append(X_scaled[i-sequence_length:i])
+    y.append(df[target].iloc[i])
+
+X, y = np.array(X), np.array(y)
+Now X.shape = [samples, 30, features] — perfect for LSTM.
+
+📄 Full Stacked LSTM Model
+📄 models/stacked_lstm.py
+
+python
+Copy
+Edit
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
+
+class StackedLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size=64):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True, dropout=0.2)
+        self.fc = nn.Linear(hidden_size, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        out = self.fc(out[:, -1, :])
+        return self.sigmoid(out)
+
+# Convert to tensors
+X_tensor = torch.tensor(X, dtype=torch.float32)
+y_tensor = torch.tensor(y, dtype=torch.float32).view(-1, 1)
+
+# Train/test split
+split = int(len(X_tensor) * 0.8)
+train_ds = TensorDataset(X_tensor[:split], y_tensor[:split])
+test_ds = TensorDataset(X_tensor[split:], y_tensor[split:])
+
+train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_ds, batch_size=64)
+
+model = StackedLSTM(input_size=X.shape[2])
+loss_fn = nn.BCELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# Train
+for epoch in range(10):
+    model.train()
+    total_loss = 0
+    for xb, yb in train_loader:
+        pred = model(xb)
+        loss = loss_fn(pred, yb)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}")
+🧪 Evaluate It
+python
+Copy
+Edit
+model.eval()
+preds = []
+targets = []
+
+with torch.no_grad():
+    for xb, yb in test_loader:
+        out = model(xb)
+        preds.extend(out.squeeze().numpy())
+        targets.extend(yb.squeeze().numpy())
+
+# Convert to binary
+pred_labels = [1 if p > 0.5 else 0 for p in preds]
+from sklearn.metrics import accuracy_score, confusion_matrix
+print("Accuracy:", accuracy_score(targets, pred_labels))
+print(confusion_matrix(targets, pred_labels))
+📈 Plot Predictions
+python
+Copy
+Edit
+import matplotlib.pyplot as plt
+
+plt.plot(preds, label='Predicted Prob')
+plt.plot(targets, label='Actual Direction')
+plt.legend()
+plt.title("Stacked LSTM Predictions vs Actual")
+plt.show()
+✨ What’s So Powerful?
+You’re using 30 days of multivariate inputs to predict just 1 thing
+
+Each feature is tracked over time
+
+Can scale to multiple stocks, timeframes, or sequence depths
+
+🧠 Bonus Ideas
+Add volume spikes, Bollinger width, or VIX
+
+Predict multi-class (Up / Flat / Down)
+
+Use Bayesian dropout to model forecast uncertainty
+
+✦ Coming Up Next: Wrapping Up and Looking Ahead
+In the final Section 9, we’ll:
+
+Summarize everything you’ve built
+
+Suggest how to combine it into a cohesive framework
+
+Lay out future upgrades: vectorbt, LightGBM, deep ensemble bots

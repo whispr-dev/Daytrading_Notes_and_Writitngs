@@ -1,0 +1,182 @@
+🤖 The Beginner's Blueprint to Day Trading with Python
+Part 10: Build Your First Real Trading Bot (MACD + RSI + VWAP + Broker Integration)
+✦ What Are We Building?
+We’re recreating the essence of the Pollen trading bot (from Stefan’s doc) using:
+
+MACD, RSI, and VWAP for strategy
+
+Alpaca API for paper/live trading
+
+Modular components (so you can swap strategies or data sources)
+
+A daily schedule to run the bot
+
+✦ Pollen Strategy: Gravity-Based Mean Reversion
+"Everything returns to the mean."
+
+Core signals:
+MACD crossover = momentum shift
+
+RSI under 30 or over 70 = extremes
+
+VWAP = where most volume traded — think of it as a “magnet”
+
+You want:
+
+Buy: MACD cross up + RSI < 35 + Price < VWAP
+
+Sell: MACD cross down + RSI > 65 + Price > VWAP
+
+💾 Alpaca Setup (Free Broker API)
+Create an account: https://alpaca.markets
+
+Get API Key + Secret (paper trading)
+
+Install the SDK:
+
+bash
+Copy
+Edit
+pip install alpaca-trade-api
+🧠 Strategy Logic (in Plain English)
+Pull last 100 candles (5-minute intervals)
+
+Calculate RSI(14), MACD(12/26/9), VWAP
+
+If buy conditions met → submit market order
+
+If sell conditions met → close position
+
+Log every action taken
+
+📄 Full Bot Code
+📄 bots/macd_rsi_vwap_bot.py
+
+python
+Copy
+Edit
+import pandas as pd
+import numpy as np
+from alpaca_trade_api.rest import REST, TimeFrame
+import datetime
+
+API_KEY = 'YOUR_API_KEY'
+API_SECRET = 'YOUR_SECRET'
+BASE_URL = 'https://paper-api.alpaca.markets'
+
+api = REST(API_KEY, API_SECRET, BASE_URL)
+
+def get_data(symbol, limit=100):
+    now = datetime.datetime.now()
+    bars = api.get_bars(symbol, TimeFrame.Minute, start=now - datetime.timedelta(days=2), limit=limit).df
+    bars = bars[bars['symbol'] == symbol]
+    return bars
+
+def calc_indicators(df):
+    df['EMA12'] = df['close'].ewm(span=12).mean()
+    df['EMA26'] = df['close'].ewm(span=26).mean()
+    df['MACD'] = df['EMA12'] - df['EMA26']
+    df['Signal'] = df['MACD'].ewm(span=9).mean()
+
+    delta = df['close'].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    return df
+
+def check_signals(df):
+    latest = df.iloc[-1]
+    prev_macd = df['MACD'].iloc[-2]
+    prev_signal = df['Signal'].iloc[-2]
+
+    buy = (latest['MACD'] > latest['Signal'] and prev_macd <= prev_signal
+           and latest['RSI'] < 35
+           and latest['close'] < latest['VWAP'])
+
+    sell = (latest['MACD'] < latest['Signal'] and prev_macd >= prev_signal
+            and latest['RSI'] > 65
+            and latest['close'] > latest['VWAP'])
+
+    return buy, sell
+
+def run_bot(symbol='AAPL'):
+    df = get_data(symbol)
+    df = calc_indicators(df)
+    buy, sell = check_signals(df)
+
+    position = None
+    try:
+        pos = api.get_position(symbol)
+        position = float(pos.qty)
+    except:
+        pass
+
+    if buy and not position:
+        print(f"BUY {symbol}")
+        api.submit_order(symbol=symbol, qty=1, side='buy', type='market', time_in_force='gtc')
+    elif sell and position:
+        print(f"SELL {symbol}")
+        api.submit_order(symbol=symbol, qty=1, side='sell', type='market', time_in_force='gtc')
+    else:
+        print(f"HOLD {symbol} | MACD: {df.iloc[-1]['MACD']:.2f}, RSI: {df.iloc[-1]['RSI']:.2f}")
+
+if __name__ == '__main__':
+    run_bot("AAPL")
+🧠 How to Run It
+You can:
+
+Run it every 15 minutes with a cronjob / task scheduler
+
+Expand it to check multiple stocks
+
+Store logs in a .csv or database
+
+✨ Bonus: Logging + Alerts
+To log every action:
+
+python
+Copy
+Edit
+import logging
+
+logging.basicConfig(filename='trading_log.txt', level=logging.INFO)
+
+# Replace print() with:
+logging.info(f"{datetime.datetime.now()} - BUY {symbol}")
+For alerts, add:
+
+python
+Copy
+Edit
+import os
+os.system('say "BUY SIGNAL"')  # macOS voice alert
+🧱 Modular Architecture You Can Build
+bash
+Copy
+Edit
+/bots/
+├── indicators.py       # All your tech indicators
+├── strategies.py       # Your signal logic
+├── broker.py           # Alpaca functions (submit, check, get_data)
+├── main.py             # Ties everything together
+Keep it pluggable, so you can:
+
+Swap brokers
+
+Test new strategies
+
+Run in paper mode before going live
+
+✦ Coming Up Next: Final Recap and Future Paths
+In the final Part 11, I’ll:
+
+Recap what you’ve built
+
+Suggest next-level paths (e.g. AI, live LSTM, HFT, portfolio rebalancers)
+
+Point you to tools to scale it to pro level

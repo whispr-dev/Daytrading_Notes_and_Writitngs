@@ -1,0 +1,303 @@
+Handling MultiIndex data in Python
+Handle multi-index data in python with the Yahoo finance dataset
+Nivedita Bhadra
+Nivedita Bhadra
+
+·
+Follow
+
+6 min read
+·
+Sep 10, 2024
+26
+
+
+
+
+
+
+We often encounter datasets with multiple levels of indexing. In this article, we’ll take a deep dive into working with MultiIndex data in Python using the powerful pandas library.
+
+Example of MultiIndex Data
+A MultiIndex DataFrame is a pandas structure with multiple levels of indexing for both rows and columns. This is especially useful when dealing with data that has more than one key dimension.
+
+Here’s a basic example of how a MultiIndex works:
+
+import pandas as pd
+
+# Sample MultiIndex DataFrame
+index = pd.MultiIndex.from_tuples([('A', 2020), ('A', 2021), ('B', 2020), ('B', 2021)])
+data = {'Sales': [100, 200, 150, 250], 'Profit': [30, 70, 50, 80]}
+df = pd.DataFrame(data, index=index)
+df.index.names = ['Company', 'Year']
+
+print(df)
+Output:
+
+               Sales  Profit
+Company Year               
+A       2020    100      30
+        2021    200      70
+B       2020    150      50
+        2021    250      80
+Here, the rows are indexed by both Company and Year, which allows for easy access to hierarchical data.
+
+Now we will download a more complex dataset and perform some analysis with the pandas library. We will work with the Yahoo finance dataset.
+
+Let’s install the required libraries:
+
+pip install yfinance pandas matplotlib
+Download the dataset
+import yfinance as yf
+
+# Define a list of stock tickers
+tickers = ['AAPL', 'GOOGL', 'MSFT']
+
+# Download stock data for the last 5 years for these tickers
+data = yf.download(tickers, start="2018-01-01", end="2023-01-01", group_by="ticker")
+
+# Display the first few rows of the dataset
+print(data.head(2))
+This is what the dataset looks like.
+
+Ticker                         GOOGL                                         \
+Price                           Open    High        Low    Close  Adj Close   
+Date                                                                          
+2018-01-02 00:00:00+00:00  52.651001  53.799  52.651001  53.6605  53.527958   
+2018-01-03 00:00:00+00:00  53.696499  54.805  53.671501  54.5760  54.441196   
+
+Ticker                                    MSFT                        \
+Price                        Volume       Open       High        Low   
+Date                                                                   
+2018-01-02 00:00:00+00:00  31766000  86.129997  86.309998  85.500000   
+2018-01-03 00:00:00+00:00  31318000  86.059998  86.510002  85.970001   
+
+Ticker                                                          AAPL  \
+Price                          Close  Adj Close    Volume       Open   
+Date                                                                   
+2018-01-02 00:00:00+00:00  85.949997  79.792923  22483800  42.540001   
+2018-01-03 00:00:00+00:00  86.349998  80.164246  26061400  43.132500   
+
+Ticker                                                                 \
+Price                           High        Low      Close  Adj Close   
+Date                                                                    
+2018-01-02 00:00:00+00:00  43.075001  42.314999  43.064999  40.568932   
+2018-01-03 00:00:00+00:00  43.637501  42.990002  43.057499  40.561863   
+
+Ticker                                
+Price                         Volume  
+Date                                  
+2018-01-02 00:00:00+00:00  102223600  
+2018-01-03 00:00:00+00:00  118071600
+In the dataset
+
+Outer Index: Tickers like AAPL, GOOGL, MSFT.
+Inner Index: Financial data like Open, High, Low, Close, Adj Close, and Volume.
+Let’s look at the data for a specific Ticker, e.g., ‘AAPL’
+
+# Get data for Apple (AAPL)
+apple_data = data['AAPL']
+print(apple_data.head(2))
+Output:
+
+Price                           Open       High        Low      Close  \
+Date                                                                    
+2018-01-02 00:00:00+00:00  42.540001  43.075001  42.314999  43.064999   
+2018-01-03 00:00:00+00:00  43.132500  43.637501  42.990002  43.057499   
+
+Price                      Adj Close     Volume  
+Date                                             
+2018-01-02 00:00:00+00:00  40.568932  102223600  
+2018-01-03 00:00:00+00:00  40.561863  118071600  
+Let's look at a particular column for all Tickers,
+
+# Get 'Close' prices for all tickers
+close_prices = data.xs('Close', level=1, axis=1)
+print(close_prices.head())
+Output:
+
+Ticker                         GOOGL       MSFT       AAPL
+Date                                                      
+2018-01-02 00:00:00+00:00  53.660500  85.949997  43.064999
+2018-01-03 00:00:00+00:00  54.576000  86.349998  43.057499
+2018-01-04 00:00:00+00:00  54.787998  87.110001  43.257500
+2018-01-05 00:00:00+00:00  55.514500  88.190002  43.750000
+2018-01-08 00:00:00+00:00  55.710499  88.279999  43.587502
+Slicing the data
+We can also slice MultiIndex DataFrames by specifying multiple index values:
+
+# Get close prices for both AAPL and MSFT
+close_prices_filtered = data.loc[:, (['AAPL', 'MSFT'], 'Close')]
+print(close_prices_filtered.head(2))
+Output:
+
+Ticker                          AAPL       MSFT
+Price                          Close      Close
+Date                                           
+2018-01-02 00:00:00+00:00  43.064999  85.949997
+2018-01-03 00:00:00+00:00  43.057499  86.349998
+2018-01-04 00:00:00+00:00  43.257500  87.110001
+2018-01-05 00:00:00+00:00  43.750000  88.190002
+2018-01-08 00:00:00+00:00  43.587502  88.279999
+Dropping and Resetting MultiIndex Levels
+Let’s remove a level from the MultiIndex,
+
+# Dropping the 'Attribute' level (keeping the 'Ticker' level)
+single_level_df = data.droplevel(level=1, axis=1)
+print(single_level_df.head(2))
+Output:
+
+Ticker                         GOOGL   GOOGL      GOOGL    GOOGL      GOOGL  \
+Date                                                                          
+2018-01-02 00:00:00+00:00  52.651001  53.799  52.651001  53.6605  53.527958   
+2018-01-03 00:00:00+00:00  53.696499  54.805  53.671501  54.5760  54.441196   
+
+Ticker                        GOOGL       MSFT       MSFT       MSFT  \
+Date                                                                   
+2018-01-02 00:00:00+00:00  31766000  86.129997  86.309998  85.500000   
+2018-01-03 00:00:00+00:00  31318000  86.059998  86.510002  85.970001   
+
+Ticker                          MSFT       MSFT      MSFT       AAPL  \
+Date                                                                   
+2018-01-02 00:00:00+00:00  85.949997  79.792923  22483800  42.540001   
+2018-01-03 00:00:00+00:00  86.349998  80.164246  26061400  43.132500   
+
+Ticker                          AAPL       AAPL       AAPL       AAPL  \
+Date                                                                    
+2018-01-02 00:00:00+00:00  43.075001  42.314999  43.064999  40.568932   
+2018-01-03 00:00:00+00:00  43.637501  42.990002  43.057499  40.561863   
+
+Ticker                          AAPL  
+Date                                  
+2018-01-02 00:00:00+00:00  102223600  
+2018-01-03 00:00:00+00:00  118071600  
+Grouping Data by Index Level
+You can group data by any index level. Suppose you want to calculate the average of Close prices for each ticker, try this:
+
+# Group by 'Ticker' level and calculate mean for each attribute
+mean_data = data.groupby(level=0, axis=1).mean()
+print(mean_data.head(2))
+Output:
+
+Ticker                             AAPL         GOOGL          MSFT
+Date                                                               
+2018-01-02 00:00:00+00:00  1.703730e+07  5.294378e+06  3.747371e+06
+2018-01-03 00:00:00+00:00  1.967864e+07  5.219712e+06  4.343638e+06
+Resampling Data
+Resampling allows you to change the frequency of the time series data. For example, if you want to calculate the monthly average Close price for each ticker:
+
+# Extract 'Close' prices from the MultiIndex DataFrame
+close_prices = data.xs('Close', level=1, axis=1)
+
+# Now you can resample the data to a monthly frequency and calculate the mean
+monthly_close = close_prices.resample('ME').mean()
+print(monthly_close.head())
+Output:
+
+Ticker                         GOOGL       MSFT       AAPL
+Date                                                      
+2018-01-31 00:00:00+00:00  56.969714  90.075238  43.501309
+2018-02-28 00:00:00+00:00  54.594000  91.367895  41.909737
+2018-03-31 00:00:00+00:00  54.688452  92.899047  43.624048
+2018-04-30 00:00:00+00:00  51.997595  93.214762  42.458572
+2018-05-31 00:00:00+00:00  53.742636  96.981364  46.384205
+Handling Missing Data
+If your MultiIndex DataFrame contains missing data, you can handle it by using ‘fillna’ or ‘dropna’:
+
+# Fill missing data with the previous value
+data_filled = data.fillna(method='ffill')
+print(data_filled.head())
+
+# Drop rows with missing values
+data_dropped = data.dropna()
+print(data_dropped.head(2))
+Ticker                         GOOGL                                   \
+Price                           Open       High        Low      Close   
+Date                                                                    
+2018-01-02 00:00:00+00:00  52.651001  53.799000  52.651001  53.660500   
+2018-01-03 00:00:00+00:00  53.696499  54.805000  53.671501  54.576000   
+2018-01-04 00:00:00+00:00  54.854500  55.203999  54.713001  54.787998   
+2018-01-05 00:00:00+00:00  55.172501  55.679001  55.090000  55.514500   
+2018-01-08 00:00:00+00:00  55.549999  55.958000  55.500000  55.710499   
+
+Ticker                                               MSFT             \
+Price                      Adj Close    Volume       Open       High   
+Date                                                                   
+2018-01-02 00:00:00+00:00  53.527958  31766000  86.129997  86.309998   
+2018-01-03 00:00:00+00:00  54.441196  31318000  86.059998  86.510002   
+2018-01-04 00:00:00+00:00  54.652668  26052000  86.589996  87.660004   
+2018-01-05 00:00:00+00:00  55.377377  30250000  87.660004  88.410004   
+2018-01-08 00:00:00+00:00  55.572891  24644000  88.199997  88.580002   
+
+Ticker                                                                \
+Price                            Low      Close  Adj Close    Volume   
+Date                                                                   
+2018-01-02 00:00:00+00:00  85.500000  85.949997  79.792923  22483800   
+2018-01-03 00:00:00+00:00  85.970001  86.349998  80.164246  26061400   
+2018-01-04 00:00:00+00:00  86.570000  87.110001  80.869820  21912000   
+2018-01-05 00:00:00+00:00  87.430000  88.190002  81.872452  23407100   
+2018-01-08 00:00:00+00:00  87.599998  88.279999  81.956001  22113000   
+
+Ticker                          AAPL                                   \
+Price                           Open       High        Low      Close   
+Date                                                                    
+2018-01-02 00:00:00+00:00  42.540001  43.075001  42.314999  43.064999   
+2018-01-03 00:00:00+00:00  43.132500  43.637501  42.990002  43.057499   
+2018-01-04 00:00:00+00:00  43.134998  43.367500  43.020000  43.257500   
+2018-01-05 00:00:00+00:00  43.360001  43.842499  43.262501  43.750000   
+2018-01-08 00:00:00+00:00  43.587502  43.902500  43.482498  43.587502   
+
+Ticker                                           
+Price                      Adj Close     Volume  
+Date                                             
+2018-01-02 00:00:00+00:00  40.568932  102223600  
+2018-01-03 00:00:00+00:00  40.561863  118071600  
+2018-01-04 00:00:00+00:00  40.750275   89738400  
+2018-01-05 00:00:00+00:00  41.214230   94640000  
+2018-01-08 00:00:00+00:00  41.061150   82271200  
+Ticker                         GOOGL                                         \
+Price                           Open    High        Low    Close  Adj Close   
+Date                                                                          
+2018-01-02 00:00:00+00:00  52.651001  53.799  52.651001  53.6605  53.527958   
+2018-01-03 00:00:00+00:00  53.696499  54.805  53.671501  54.5760  54.441196   
+
+Ticker                                    MSFT                        \
+Price                        Volume       Open       High        Low   
+Date                                                                   
+2018-01-02 00:00:00+00:00  31766000  86.129997  86.309998  85.500000   
+2018-01-03 00:00:00+00:00  31318000  86.059998  86.510002  85.970001   
+
+Ticker                                                          AAPL  \
+Price                          Close  Adj Close    Volume       Open   
+Date                                                                   
+2018-01-02 00:00:00+00:00  85.949997  79.792923  22483800  42.540001   
+2018-01-03 00:00:00+00:00  86.349998  80.164246  26061400  43.132500   
+
+Ticker                                                                 \
+Price                           High        Low      Close  Adj Close   
+Date                                                                    
+2018-01-02 00:00:00+00:00  43.075001  42.314999  43.064999  40.568932   
+2018-01-03 00:00:00+00:00  43.637501  42.990002  43.057499  40.561863   
+
+Ticker                                
+Price                         Volume  
+Date                                  
+2018-01-02 00:00:00+00:00  102223600  
+2018-01-03 00:00:00+00:00  118071600  
+Visualization of MultiIndex Data
+We can plot the data set from this MultiIndex dataframe with matplotlib library. Let’s plot the Close prices for multiple tickers.
+
+import matplotlib.pyplot as plt
+# Plot Close prices for AAPL, GOOGL, and MSFT
+close_prices = data.xs('Close', level=1, axis=1)
+close_prices.plot(figsize=(10, 6))
+plt.title('Close Prices for AAPL, GOOGL, and MSFT')
+plt.xlabel('Date')
+plt.ylabel('Close Price')
+plt.grid(True)
+# Save the figure as a PNG file
+plt.savefig('multiindex_close_prices.png')
+plt.show()
+
+Image created by the author
+These are some of the techniques you can implement to extract, subset, and perform basic mathematical operations on multi-index dataframe using pandas libraries. For a detailed analysis on the Yahoo finance dataset check out the medium article

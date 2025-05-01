@@ -1,0 +1,635 @@
+Pricing Options in Python Part 1: Binary Options
+Anon Quant
+Anon Quant
+
+·
+Follow
+
+15 min read
+·
+Aug 5, 2024
+44
+
+
+
+
+
+
+Binary options, (a.k.a Digital Options) are known for their straightforward payoff structure, they are a popular financial derivative among traders. The appeal of binary options lies in their simplicity and the fixed nature of their payouts. This article delves into the intricacies of binary call and put options, elucidating their payoff mechanisms and underlying mathematical principles.
+
+The Payoff of Binary (Digital) Call Options
+The binary call option’s payoff is remarkably straightforward. At expiry, if the option is “in the money” (ITM) — meaning the spot price exceeds the strike price — the buyer receives a predetermined, fixed amount. Conversely, if the option is “out of the money” (OTM) — where the spot price is below the strike price — the buyer typically receives nothing, often referred to as the redemption value, which is usually zero.
+
+Mathematically, the payoff of a binary call option can be expressed as:
+
+
+The Payoff of Binary Put Options
+Similarly, the payoff for a binary put option is determined by the relationship between the spot price and the strike price at expiry. If the spot price is below the strike price (ITM for a put), the buyer receives a fixed payout. If the spot price is above the strike price (OTM for a put), the buyer receives zero.
+
+
+The Heaviside Step Function
+The binary options’ payoff can be further understood through the Heaviside step function, also known as the unit step function. Named after the British engineer Oliver Heaviside, this function is fundamental in mathematics and engineering, denoting a value of zero for negative arguments and one for positive arguments.
+
+For binary options, the Heaviside step function H(x) can be adapted to represent the payout structure:
+
+We can script the heaviside function very easily in python:
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def Heaviside(S,E=100, is_call=True): 
+    """
+        The Heaviside function.
+        
+        Parameters: 
+        ===========
+        S : float
+            the underlying stock price 
+        E : float
+            the strike price 
+        is_call : boolean 
+            is the option is a call option or put option. 
+            
+        Returns: 
+        ==========
+        payoff : int
+            int can have a value of 1 or 0 
+    
+    """
+    if is_call:
+        if S > E:
+            return 1
+        return 0
+    
+    if S < E:
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    
+    f = np.vectorize(Heaviside)
+    x = np.linspace(0,200,num=201, dtype=int)
+
+    # Create call and put payoffs over linear space of stock prices
+    call = f(x,100,True)
+    put = f(x,100,False)
+
+    # Plot the payoff function
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,7))
+
+    ax1.plot(call)
+    ax2.plot(put)
+
+    ax1.set_title('Binary Call')
+    ax2.set_title('Binary Put')
+
+    fig.show()
+
+Close Form Solutions & the Greeks:
+In the realm of options trading, the Black-Scholes-Merton model provides a robust framework for pricing various types of options, including binary options. This model not only offers a closed-form solution for pricing but also allows traders to understand the sensitivity of an option’s price to various factors, known as the “Greeks.” These Greeks are vital for risk management and strategic decision-making in options trading.
+
+What Are the Greeks?
+The Greeks are a set of measures that describe how the price of an option changes in response to various factors. Each Greek represents a different aspect of risk associated with holding an options position. Here, we will explore the primary Greeks: Delta, Gamma, Theta, Vega, and Rho.
+
+1. Delta (Δ)
+Delta measures the sensitivity of the option’s price to changes in the price of the underlying asset. For binary options, Delta indicates how much the probability of finishing in the money changes with a small change in the underlying asset’s price.
+
+2. Gamma (Γ)
+Gamma measures the rate of change of Delta with respect to changes in the underlying asset’s price. It shows how the Delta of an option changes as the underlying asset’s price changes. For binary options, Gamma is significant near the strike price, where the probability of ending in the money changes most rapidly.
+
+High Gamma: Indicates significant sensitivity to changes in the underlying asset’s price near the strike price.
+Low Gamma: Suggests minimal changes in Delta as the underlying asset’s price moves away from the strike price.
+3. Theta (Θ)
+Theta represents the sensitivity of the option’s price to the passage of time. It measures the rate at which an option’s price decreases as time to expiry approaches. For binary options, Theta is critical since the probability of ending in the money changes as the expiry date approaches.
+
+Negative Theta: Indicates that the option loses value as time passes, common for most options including binaries.
+Impact on Binary Options: The closer the expiry, the more rapidly the option’s price can change.
+4. Vega (ν)
+Vega measures the sensitivity of the option’s price to changes in the volatility of the underlying asset. For binary options, Vega indicates how the probability of finishing in the money is affected by changes in volatility.
+
+Positive Vega: An increase in volatility typically increases the price of the option, as the probability of the underlying asset moving in favor of the option increases.
+Binary Call and Put Options: Both typically have positive Vega, reflecting the heightened probability of reaching the strike price with increased volatility.
+5. Rho (ρ)
+Rho measures the sensitivity of the option’s price to changes in the risk-free interest rate. It shows how the value of an option changes as interest rates fluctuate.
+
+Using the closed form solutions we can write a function to price a digital option and generate it’s greeks:
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def DigitalOption(S, E, r, T, v, is_call=True): 
+    """
+        Calculate price of Call option using Black Scholes formula
+
+    Parameters:
+    ===========
+    S : float
+        The underlying asset price.
+    E : float 
+        the digital strike price
+    r : float
+        the risk free rate
+    v : float
+        the "constant" underlying asset volatility 
+    T : expiry
+        time to expiry in years. 
+    is_call : boolean
+        if true the price and greeks for a binary call option are returned - 
+        if false the price and greeks for a binary put option are returned.
+    
+    Returns:
+    ==========
+    The function returns a dictionary of the following:
+    Note the values have been scaled to market conventions 
+    eg as seen on the Bloomberg Equity Option pricer OVME
+    
+    price : float 
+        The price of the option calculated via the closed for solution 
+        to the black-scholes-merton formula .
+    delta : float
+        The first derivative with respect to underlying price. The 
+        sensitivity of the option price to a change in the underlying price.
+    gamma : float 
+        The second derivative with repect to underlying price. The 
+        sensitiviy of the options delta with respect to a change in the 
+        underlying price
+    theta : float 
+        The first derivative with respect to time. 
+        Note this derivative is a central whilst time can only move forward. 
+    vega : float
+        the first derivative with respect to the volatility. The sensitivity 
+        of the options value to a change in the volatility
+    rho : float
+        the first derivative with respect to the risk free rate. The sensitivity 
+        of the options value to a change in the risk free rate. 
+    
+    
+    """
+        
+    d1 = (np.log(S/E) + (r+(1/2)* v**2)*(T))  / v * (T**0.5)
+    d2 = d1 - v * T**0.5
+
+    
+    if is_call:
+        option_price = np.exp(-r * T) * norm.cdf(d2)
+        delta = np.exp(-r * T) * norm.pdf(d2) /  v * S * np.sqrt(T) 
+        gamma = - np.exp(-r * T) * d1 *  norm.pdf(d2) /  v**2 * S**2 * T 
+        theta = r * np.exp(-r*T)*norm.cdf(d2) + np.exp(-r * T) * norm.pdf(d2) * ((d1/(2*T)) - (r)/(v* T**0.5))
+        vega = - np.exp(-r*T) * norm.pdf(d2) * d1/v
+        rho = - T * np.exp(-r*T) * norm.cdf(d2) + (T**0.5)/v * np.exp(-r*T) * norm.pdf(d2) 
+
+    else:
+        option_price = np.exp(-r * T) * (1 - norm.cdf(d2)) 
+        delta = - np.exp(-r * T) * norm.pdf(d2) /  v * S * np.sqrt(T)
+        gamma = np.exp(-r * T) * d1 *  norm.pdf(d2) /  v**2 * S**2 * T 
+        theta = r * np.exp(-r*T)*(1 - norm.cdf(d2)) + np.exp(-r * T) * norm.pdf(d2) * ((d1/(2*T)) - (r)/(v* T**0.5))
+        vega = np.exp(-r*T) * norm.pdf(d2) * d1/v
+        rho = - T * np.exp(-r*T) * (1 - norm.cdf(d2)) + (T**0.5)/v * np.exp(-r*T) * norm.pdf(d2) 
+
+        
+    results = OrderedDict([
+        ("price" , option_price),
+        ("delta" , delta / 1e4),
+        ("gamma" , gamma/ 1e6),
+        ("vega" , vega /1e2),
+        ("theta" , theta),
+        ("rho" , rho / 1e4)
+    ])
+
+    return results
+        
+if __name__ == "__main__":
+    
+    start_time = time.time()
+    
+    S = 100  # Asset Price
+    E = 100  # Strike Price
+    r = 0.05 # Constant Risk free rate
+    T = 1    # Time to expiry
+    v = 0.2  # Constant Volatility
+
+    call = DigitalOption(S, E, r, T, v, is_call=True) 
+    put = DigitalOption(S, E, r, T, v, is_call=False) 
+    
+    print(f"Time to calculate option price and greeks : {start_time-time.time():.5f}s")
+    
+    display(pd.DataFrame([call,put], index=['Call','Put']).T)
+
+Put — Call Parity
+The put-call parity relationship is a fundamental principle in options pricing that connects the prices of put and call options. For binary options, this relationship can be defined as the sum of the prices of a binary put and a binary call being equal to the forward price of the underlying asset.
+
+Below is a Python function to assert that this put-call parity holds for given prices.
+
+def check_binary_put_call_parity(call_price, put_price, risk_free_rate, expiry):
+    """
+    A function that checks if put call parity for a binary option holds 
+    given input prices, consant risk free rate and expiry
+         
+    Parameters: 
+    ===========
+    call_price : float 
+        price of binary call
+    put_price : floatt
+        price of binary put 
+    risk_free_rate : float 
+        constant risk free rate 
+    expiry : float
+        time to expiry 
+    
+    Returns: 
+    ==========
+    check : boolean
+        True is put call parity holds
+    error : float
+        returns distance from parity. if put call
+        parity holds this should return 0 
+        
+    """
+    
+    error = call_price + put_price - np.exp(-risk_free_rate*expiry)
+    
+    # using 0 here can be replaced with a tolerance value due to floating point error.
+    if error == 0: 
+        return True, 0
+    
+    return False, error
+
+if __name__ == "__main__":
+    check, error = check_binary_put_call_parity(
+        DigitalOption(S, E, r, T, v, is_call=True)['price'],
+        DigitalOption(S, E, r, T, v, is_call=False)['price'],
+        r,
+        T
+    )
+    
+    print(f"Put Call Parity holds: {check}, Error: {error}")
+Put Call Parity holds: True, Error: 0
+Thus it can be seen that when using a closed for solution Put-Call Parity holds for binary options.
+
+But what about other methods of pricing binary options such as Monte-Carlo?
+Monte Carlo simulation is a powerful technique used in financial engineering to price complex derivatives, given closed form solutions exist for binary options it is overkill however it will allow us to build a framework to price more complex derivatives.
+
+Below, I provide a detailed explanation and Python implementation of the algorithm described in the pseudo code. This method involves simulating the risk-neutral random walk of the underlying asset, calculating payoffs, and determining the present value of the average payoff.
+
+Pseudo Code Steps
+Simulate the Risk-Neutral Random Walk: Starting with the current value of the asset, simulate its price path over the required time horizon, which extends from the valuation date to the option’s expiration. This process produces one realization of the underlying asset’s price path.
+Calculate the Derivative Payoff: For the simulated path, determine the binary option’s payoff at expiration.
+Repeat for N Realizations: Perform the above steps for NNN different realizations to account for various possible paths the underlying asset might take.
+Calculate the Average Payoff: Compute the average payoff across all realizations.
+Present Value of Average Payoff: Discount the average payoff back to the present value to find the option’s price.
+1. Simulating the risk neutral random walk using Euler-Maruyama:
+The Euler-Maruyama method is a numerical technique used to approximate solutions to stochastic differential equations (SDEs), such as those found in the Black-Scholes model.
+
+The Euler–Maruyama method for the Black-Scholes equation:
+
+
+This implementation is not the most memory efficient way to price a digital option but allows quick compilation of the error for linear increase in number of samples to produce a continuous error diagram. By saving the entire sample-path it also allows us to build a framework for pricing other derivative instruments without duplicating allot of code. The functional approach allows for switching of schemes with minimal effort.
+
+Below, I will provide a detailed Python implementation of the Euler-Maruyama method for the Black-Scholes equation, simulate multiple sample paths, and plot these paths.
+
+from numba import jit
+import numpy as np
+import matplotlib.pylot at plt
+
+
+@jit(nopython=True)
+def generate_paths_euler_bs(price, r , sigma, num_paths, num_time_steps, seed=2):
+    """
+        Generates a np.ndarray of paths with n number of timesteps by using the 
+        Euler–Maruyama method for the black scholes equation. 
+        
+        As looping python can be very slow, the numba python package has been used to compile 
+        the python code to c++ making the same funtion much faster.
+        
+        Euler–Maruyama method for the Black-Scholes equation: 
+        $P_{t} = P_{t-1} * (1 + r * dt + \sigma * \sqrt{dt} * z)$
+        $z \sim N(0,1)$
+        
+        Parameters: 
+        ===========
+        price : float 
+            The inital underlying price of the asset. 
+        r : float 
+            The risk free rate 
+        sigma : float
+            The volatility of the asset. 
+        num_paths : int 
+            The number of paths to generate 
+        num_time_steps : int
+            The number of timesteps in each path.
+            
+        Returns: 
+        ===========
+        paths : numpy.ndarray('float64', shape=(num_paths, num_time_steps)) 
+    
+    """
+
+    dt = 1 / num_time_steps
+    sqrt_dt = dt ** 0.5 
+    
+    # Set seed so results are reproducable.
+    np.random.seed(seed)
+
+    paths = np.concatenate(
+        (
+            np.ones(shape=(num_paths,1)) * price,
+            np.zeros(shape=(num_paths, num_time_steps))
+        ),
+        axis=1
+    )
+    
+    # Generate n by m number of radom samples from 
+    # the standard normal distribution.
+    dw = np.random.standard_normal(size=(num_paths,num_time_steps))
+
+
+    for path_num in range(paths.shape[0]): 
+        for step in range(1, paths.shape[1]):
+            paths[path_num, step] = paths[path_num, step-1] * (1 + r * dt + sigma * sqrt_dt * dw[path_num,step])
+            
+    return paths[:,1:]
+
+if __name__ == "__main__":
+    start_time = time.time()
+
+    price = 100
+    expiry = 1
+
+    r = 0.05 
+    sigma = 0.20 
+
+    num_paths = 100
+    num_time_steps = 252
+
+    paths = generate_paths_euler_bs(
+        price,
+        r,
+        sigma,
+        num_paths,
+        num_time_steps,
+        seed=2
+    )
+    
+    plt.figure(figsize=(20,10))
+    plt.title("Euler-Maruyama Scheme Generated Paths")
+    plt.plot(paths.T)
+
+The above graph shows 100 simulated paths of stock prices and the evolution over 252 time steps or 1 year.
+
+2. Calculate the Binary Payoff
+The below function prices binary options based of the simulated paths. As the code is aimed to be reusable to price more exotic types e.g. with features involving path dependencies for example barriers the path generation function returns the entire path for each simulated path.
+
+As we care only for the last price in the path the function will compare the final price for each path versus the strike. Calculate the payoff. Take the average of the payoffs. Discount the average payoff to provide the price.
+
+The function shall also approximate the error of the Monte-Carlo price — the theory for which is outlined below:
+
+By construction our Monte-Carlo has inherit errors in the results. The errors depend on the number of paths generated and with respect to N is
+
+
+where N is the number of paths.
+
+For each path generated a payoff is known — as outlines above by the Heaviside function. As we have generated N number of paths we also have N number of payoffs. Due to Central limit theorem we know that for large number of samples the random variable is approximately normally distributed. i.e.
+
+
+The variance in this case can be approximated by using the following estimation:
+
+
+We therefore have for our error:
+
+
+which is an approximation of the error. As we use Central limit theorem to obtain this result the values given when using a low number of paths are not robust.
+
+def price_digital_from_paths(paths, r, k, T, is_call=True):
+    """
+        Function to price a digital option from n number of paths.
+        
+        Parameters:
+        ===========
+        paths : np.ndarray
+            n by m numpy array of paths
+        r : float
+            the constant risk free rate 
+        K : float
+            digital strike
+        T : float
+            expiry of the option 
+        is_call : boolean
+            Set true if the option is a call option 
+            Set false is the option is a put option
+            
+        Returns:
+        =========
+        option_price : float
+            the price of the option
+    """
+    
+    if is_call:
+        diff = paths[:,-1] - k
+    else:
+        diff = k - paths[:,-1]
+
+    avg_payoff = np.average(np.where(diff > 0, 1 , 0))
+    
+    discounted_payoff = np.exp(-r * T) * avg_payoff
+    
+    sigma = (np.average(np.where(diff > 0, np.exp(-r * T)*1 , 0)**2) - discounted_payoff**2 ) **0.5
+    error = sigma / paths.shape[0] ** 0.5
+    
+    return discounted_payoff, error
+We can now price our payoff using Euler-Maruyama and compare the difference between the closed form solution and the monte carlo simulation.
+
+To see the accuracy over different number of samples — 125000 sample paths with 252 time steps shall be generated once. Then an increasing number of these paths shall be used to price the option
+
+The difference between the Binary option price for both call and put compared to the closed form solution can be plotted for increasing number of sample paths.
+
+if __name__ == "__main__":
+    
+    start_time = time.time()
+    
+    seed = 2 
+
+    price = 100
+    strike = 100
+    expiry = 1
+    is_call = True
+
+    r = 0.05 
+    sigma = 0.20 
+
+    num_paths = 125000
+    num_time_steps = 252
+
+    paths = generate_paths_euler_bs(
+        price,
+        r,
+        sigma,
+        num_paths,
+        num_time_steps,
+        seed
+    )
+
+    digital_call_price, estimate_call_error = price_digital_from_paths(
+        paths, 
+        r, 
+        strike, 
+        expiry, 
+        is_call=True
+    )
+    
+    digital_put_price, estimate_put_error = price_digital_from_paths(
+        paths, 
+        r, 
+        strike, 
+        expiry, 
+        is_call=False
+    )
+    
+    print(f"The numba optimized execution takes {time.time() - start_time:.2f} seconds ")
+    print(f"Memory Required to store the paths: {paths.nbytes / 1024 /2024:.2f} MB\n")
+
+    print(f"Call Price MC ES: {digital_call_price}")
+    print(f"Put Price MC ES: {digital_put_price}")
+    
+    check, error = check_binary_put_call_parity(
+        digital_call_price,
+        digital_put_price,
+        r,
+        T
+    )
+    
+    print(f"Put Call Parity holds: {check}, Error: {error}\n")
+    
+    bs_call_price = DigitalOption(S, E, r, T, v, is_call=True)['price']
+    bs_put_price = DigitalOption(S, E, r, T, v, is_call=False)['price']
+    
+    print(f"Call Price BS: {bs_call_price}")
+    print(f"Put Price BS: {bs_put_price}\n")
+    
+    print(f"Error for Call: {digital_call_price - bs_call_price}")
+    print(f"Error for Put: {digital_put_price - bs_put_price}\n")
+    
+    price_calls = []
+    price_puts = []
+    
+    estimated_errors_calls = []
+    estimated_errors_puts = []
+
+    actual_error_calls = []
+    actual_error_puts = []
+    
+    num_samples = []
+
+
+    for i in range(100, num_paths+1,100):
+        
+        call, call_error_estimated = price_digital_from_paths(
+            paths[:i, -1:], 
+            r, 
+            strike, 
+            expiry, 
+            is_call=True
+        )
+        
+        
+        put, put_error_estimated = price_digital_from_paths(
+            paths[:i, -1:], 
+            r, 
+            strike, 
+            expiry, 
+            is_call=False
+        ) 
+        
+        call_error = call - bs_call_price
+        put_error =  put - bs_put_price
+        
+        price_calls.append(call)
+        price_puts.append(put)
+        
+        estimated_errors_calls.append(call_error_estimated)
+        estimated_errors_puts.append(put_error_estimated)
+        
+        actual_error_calls.append(call_error)
+        actual_error_puts.append(put_error)
+
+        num_samples.append(i)
+        
+    
+    table = pd.DataFrame(
+        [
+            price_calls, 
+            estimated_errors_calls, 
+            actual_error_calls,  
+            price_puts, 
+            estimated_errors_puts,
+            actual_error_puts
+        ], 
+        index=[
+            'Call Price', 
+            'Estimated Call Error', 
+            'Actual Call Error', 
+            'Put Price', 
+            'Estimated Put Error', 
+            'Actual Put Error'], 
+        columns=num_samples,
+    )[[100,1000,10000,100000]].T
+
+    display(table)
+        
+    plt.figure(figsize=(20,10))
+    plt.title("Monte Carlo Error")
+    plt.plot(num_samples[10::10], actual_error_calls[10::10], label='Call Error')
+    plt.plot(num_samples[10::10], actual_error_puts[10::10], label='Put Error')
+    plt.legend()
+    plt.xlabel("Number of paths")
+    plt.xlabel("Actual Error")
+    plt.hlines(0,0,num_paths)
+    
+    plt.figure(figsize=(20,10))
+    plt.title("Binary Call Option Premium with Estimated Errors")
+    plt.errorbar(num_samples, price_calls, yerr=estimated_errors_calls)
+    plt.plot(num_samples, price_calls, zorder=10)
+
+    plt.xlabel("Number of paths")
+    plt.ylabel("Option Premium")
+    plt.hlines(bs_call_price,0,num_paths)
+    
+    plt.figure(figsize=(20,10))
+    plt.title("Monte Carlo Estimated Error")
+    plt.xlabel("Number of paths")
+    plt.ylabel("Estimated Error")
+    plt.plot(num_samples[10:],estimated_errors_calls[10:])
+    plt.show()
+    
+    del paths
+
+
+
+
+
+The first graph depicts the actual error of the Monte-Carlo simulation it also shows the decreasing returns in accuracy as the number of sample paths increases. And confirms the relationship and inefficiencies in Monte Carlo Simulation. It is perhaps better to focus on increasing the speed of convergence rather than increasing the number of paths.
+
+The second graph plots the option price versus the number of paths with a band for the error, calculated per the methodology outlined above. this clearly shows a decreasing width for our error bars. To highlight this further the error the estimated error has been plotted versus the number of samples and follows a similar trend line to the actual errors. The key take away is that it become less and less useful to increase the number of paths.
+
+If we recall the relationship for our errors it shows that the error is a function of both the variance and the number of paths — instead of focusing on increasing the number of paths we can shift the focus to improving convergence via the variance.
+
+In this exploration, we have delved into two distinct methodologies for pricing binary options: closed-form solutions and Monte Carlo simulations. Each approach has its strengths and practical applications, providing valuable insights and tools for traders and analysts.
+
+Closed-Form Solutions
+The closed-form solution for pricing binary options is derived from the Black-Scholes-Merton model. This model provides a direct mathematical expression to calculate the option price, making it a quick and efficient method for pricing.
+
+Advantages:
+
+Efficiency: Closed-form solutions are computationally efficient, providing quick results.
+Precision: The mathematical nature of the solution ensures precision in pricing.
+Greeks Calculation: Allows for straightforward calculation of the Greeks, which are essential for risk management and strategy development.
+Monte Carlo Simulations
+Monte Carlo simulations offer a flexible and robust approach to pricing binary options, especially when dealing with complex derivatives or when market conditions deviate from the assumptions of the Black-Scholes-Merton model.
+
+Advantages:
+
+Flexibility: Capable of handling a wide range of derivatives and complex market conditions.
+Realism: Simulates a large number of potential future paths for the underlying asset, capturing the stochastic nature of markets.
+Framework for Extension: The simulation framework can be extended to price other derivative instruments with minimal code duplication.
+Continue with part 2. Where we use antithetic variance reduction to reduce our error.

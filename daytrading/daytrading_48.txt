@@ -1,0 +1,156 @@
+11 Times Faster Hyperparameter Tuning with HalvingGridSearch
+Successive halving completely crushes GridSearch and RandomSearch
+Bex T.
+Towards Data Science
+Bex T.
+
+·
+Follow
+
+Published in
+Towards Data Science
+
+·
+9 min read
+·
+Apr 9, 2021
+121
+
+
+1
+
+
+
+
+
+
+Photo by Karolina Grabowska on Pexels
+Introduction
+For a while now, GridSearchCV and RandomizedSearchCV classes of Scikit-learn have been the go-to choice for hyperparameter tuning. Given a grid of possible parameters, both use a brute-force approach to figure out the best set of hyperparameters for any given model. Though they provide pretty robust results, tuning heavier models on large datasets can take too much time (we are talking hours, here). This meant that unless you have got a machine with 16+ cores, you were in trouble.
+
+But in December 2020, version 0.24 of Scikit-learn came out along with two new classes for hyperparameter tuning — HalvingGridSearch and HalvingRandomSearchCV. In the official user guide, Scikit-learned claimed that "they can be much faster at finding a good parameter combination" and man, were they right!
+
+In the very first experiment where I compared GridSearchCV with HalvingGridSearchCV, the latter found the best set of hyperparameters 11 times faster than GridSearch. In the second experiment, where I increased the size of my parameter grid 30 times (~3000 final candidates) I used HalvingRandomSearchCV which resulted in a 6% increase in performance and the whole thing took only 10 minutes.
+
+Keep reading to find out how these two phenomenal classes work and learn how to use them in your own workflow.
+
+Join Medium with my referral link - BEXGBoost
+Get exclusive access to all my ⚡premium⚡ content and all over Medium without limits. Support my work by buying me a…
+ibexorigin.medium.com
+
+Get the best and latest ML and AI papers chosen and summarized by a powerful AI — Alpha Signal:
+
+Alpha Signal | The Best of Machine Learning. Summarized by AI.
+Stay in the loop without spending countless hours browsing for the next breakthrough; our algorithm identifies the…
+alphasignal.ai
+
+A Note on Terminology
+Before we move on, let’s make sure we are all on the same page on some of the terms I will be using today.
+
+1. Hyperparameters: a model’s internal settings that should be set by the user. The model cannot learn these from training data. An example is the learning rate in xgboost estimators.
+
+2. Parameter Grid: a dictionary with parameter names as keys and a list of possible hyperparameters as values. Here is a sample parameter grid for XGBClassifier:
+
+
+A parameter grid’s size or all possible combinations are calculated by multiplying the number of possible values of each parameter. So, the above grid has 4 * 3 * 3 = 36 possible combinations. Generally, parameter grids will be much larger than that.
+
+3. Candidate: a single combination from all possible sets of hyperparameters in a parameter grid.
+
+4. Resources or samples: another name for the data at hand. One sample refers to a single row in training data.
+
+5. Iteration: any single round in which a single set of hyperparameters is used on the training data.
+
+Brief Overview of GridSearchCV and RanomizedSearchCV
+Since the main ideas of the new classes are related to GridSearch and RandomSearch, let me briefly give an overview of how they work.
+
+GridSearch is an exhaustive, brute-force estimator. This means that all combinations of hyperparameters will be trained using cross-validation. If there are 100 possible candidates and you are doing 5-fold cross-validation, the given model will be trained 500 times (500 iterations). Surely, this will take an excruciatingly long time for heavy models.
+
+RandomizedSearch tries to control the number of iterations by making “smarter” choices about which set of parameters to choose in each iteration. It has an additional n_iter parameter that directly controls this process. If there are 1000 candidates and n_iter is set to 100, the search will stop after the 100th iteration and returns the best results from those 100. This random choosing process results in a much shorter training time but its performance won't be as good as GridSearch.
+
+If you want to learn more about them and see them in action check out my separate article on the topic:
+
+Automatic Hyperparameter Tuning with Sklearn GridSearchCV and RandomizedSearchCV
+Tune models without a second glance at hyperparameters
+towardsdatascience.com
+
+What Is Successive Halving?
+While both GridSearch and RandomizedSearch train the candidates on all of the training data, HalvingGridSearch and HalvingRandomSearch take a different approach called successive halving. Let’s see what it means in terms of HalvingGridSearch (HGS).
+
+HGS is like a competition among all candidates (hyperparameter combinations). In the first iteration, HGS trains all candidates on a small proportion of the training data. In the next iteration, only the candidates which performed best are chosen and they will be given more resources to compete. So, with each passing iteration, the ‘surviving’ candidates will be given more and more resources (training samples) until the best set of hyperparameters are left standing.
+
+Now, let’s get more granular. The speed of the above process can be controlled by two arguments — factor and min_samples. min_samples takes an integer to specify the number of samples of the training data to use in the first iteration. All candidates are trained on this data and in the next iteration min_samples grows by factor and the number of candidates decreases by factor. All next rounds continue in this manner until the best candidate is found.
+
+To let the idea sink in with an example, let’s say we have 1000 samples and 20 candidates in the parameter grid. If we set min_samples to 20 and choose a factor of 2, here is how the iterations will unfold:
+
+png
+Setting the min_resources to 20 with 20 candidates, we are only able to run 4 iterations because we will run out of candidates before exhausting all samples. This means the rest of the training data (1000 - 160 = 840) will be wasted and the best candidate is only found by training only on 160 rows of data.
+
+Similarly, we may also run out of samples before all candidates are tried out. For example, let’s say we have 1000 samples and 300 candidates. We set min_samples to 50 and choose a factor of 2:
+
+png
+As you can see, at the 5th iteration, we don’t have enough resources to double further and we are left with 18 final candidates. These final candidates have no choice but to be trained on the full dataset which is no different than plain old GridSearch. This problem is even more evident with real-world datasets.
+
+For example, the dataset we will be using today has 145k samples. So, we need to make sure that we choose such a combination of factor and min_samples that we will end up with as many unwasted resources as possible at the last iteration.
+
+That sure sounds a lot of guesswork but fortunately, you can pass exhaust to min_samples so that the minimum number of resources will be automatically determined to create the best possible combination with factor and a number of candidates. For example, for 1000 samples and a factor of 2, setting the min_samples to exhaust will set it to 250 which will become 250, 500, 1000 samples as we go through each iteration.
+
+The official guide says that exhausting the number of samples will definitely lead to a more robust selection of parameters but might be a bit more time-consuming. In the next sections, we will explore just how much better the new classes are than their counterparts.
+
+Comparison of HalvingGridSearchCV to old GridSearchCV
+To compare the two classes, I will be using the Rain in Australia dataset to predict whether it rains today or not. To focus only on the topic at hand, I created prep.py file which contains all necessary preprocessing steps required: handling missing values, scaling numeric features, and encoding categorical variables (you can get the file in this GitHub gist).
+
+
+png
+
+Running the preprocess function returns a cleaned, processed feature and target arrays which we will save under traditional names:
+
+
+The target variable is RainToday and as a base estimator, we will use XGBoostClassifier. Let's first establish the base score by fitting it with default parameters:
+
+
+To calculate the ROC_AUC score, the target and predictions should be encoded, which they are not:
+
+
+Let’s encode them with LabelEncoder:
+
+
+We have a base score of 0.73. Now, we will try to improve on this by tuning only 4 of the hyperparameters:
+
+
+If you are not familiar with XGBoost and what are its parameters, check out my beginner-friendly article on it.
+
+The number of candidates is 108. First, we will do exhaustive GridSearch with 5-fold cross-validation which is the default in both classes. The metric is still roc_auc:
+
+
+After more than an hour, we found the best params and the score:
+
+
+Surprisingly, the roc_auc score went down a little. Maybe, we did not provide a good enough parameter grid. However, for the sake of comparison, let's perform the same tuning using HalvingGridSearchCV. It is also imported from sklearn.model_selection and you should also import enable_halving_search_cv because it is still an experimental feature.
+
+As I said, we will set min_resources to exhaust and choose a factor of 3 which Scikit-learn recommends:
+
+
+Wow! Phenomenal decrease in runtime — almost 11 times faster than GridSearch. Let’s look at the performance now:
+
+
+As you can see, the results are almost identical. But HGS achieved this score 11 times faster than GridSearchCV!
+
+Evaluating HalvingRandomSearchCV
+This time, let’s create a bigger grid with better possible hyperparameters.
+
+First of all, XGBoost documentation says that to account for class imbalance, we should adjust scale_pos_weight. It is shown that to find the optimal value, we should divide the sum of negative classes by the sum of positives. Let's do it:
+
+
+We found the scale_pos_weight. Now, we were also fixing the subsample and colsample_bytree values to avoid overfitting. Let's provide more possible values this time because the model might have been too constrained.
+
+Last time, gamma's best value was found to be 1 which is the end of its range, so we should extend it too:
+
+
+Now, we have got a pretty massive grid, the one with almost 3000 candidates. Let’s see what HalvingRandomSearchCV makes of this (exhausting all the available resources in this class is done by setting n_candidates to exhaust):
+
+I am not even bothering to compare HalvingRandomSearchCV to plain-old RandomizedSearchCV after seeing the HGS crush the GridSearch. Clearly, successive halving is way better than both of the old methods.
+
+
+For a pretty massive grid, it took only 10 minutes to find the best score. Besides, this time we saw a 6% increase in roc_auc score which we could not do with both HGS and GridSearch.
+
+Are you impressed yet?

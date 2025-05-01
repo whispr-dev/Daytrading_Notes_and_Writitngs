@@ -1,0 +1,220 @@
+How To Get Free Historical Intraday Equity Prices (With Code Examples)
+Itay V
+Itay V
+
+·
+Follow
+
+6 min read
+·
+May 25, 2024
+4
+
+
+
+
+
+
+
+As part of an algorithmic trading project that I am working on, I need to backtest a trading strategy that works on 5 minute candle bars. Popular sites like Yahoo Finance and their complementary python packages (like yfinance, yahoo_query etc..) which are great for historical daily bars, are limited to only 2 months of history when it comes to intraday bars (like 1 minute, 5 minutes etc…). This is a limitation that comes from Yahoo Finance itself.
+
+2 months of data is not enough for my project, I need at least 1 year of intraday data so that I can backtest my strategy properly, simulate enough trades and not overfit on a specific cycle in the market. After researching online I have not found a free API that gives you access to intraday bar history for a diverse list of stocks (in my project I look at about 1000 symbols).
+
+Tradestation
+
+I have had an account in Tradestation for about a year and I found out that they have a free API (for funded accounts above $10k) that also provides historical prices, it’s also quite convenient as well. The authentication part could be a bit tricky so in this blog post I will try to explain how the authentication works, how to automate it with python and finally, how to request a large amount of intraday bars on any ticker in a reasonable time for your backtesting needs.
+
+Auth Flow
+1. Requesting the API key
+So requesting an API key from Tradestation is quite straight forward. You need to send an email to ClientService@tradestation.com and ask for an API key. After a day or two you will receive a pdf document containing a key and a secret. These are like your username and password to the Tradestation API, it’s important to store them in a secure way and not upload them to git or anything.
+
+2. Obtaining the refresh token
+Every request to the API needs to have a bearer token in the header that will authenticate you to the API, the token in the header is called an “access token”. This token expires after 15 minutes and needs to be refreshed every time it expires. To refresh the access token, a “refresh token” is required. The refresh token is permanent, and thus needs to be stored securely on the machine that does the requesting. So how can this refresh token be obtained?
+
+First, you need to open your browser and go to the following address:
+
+https://signin.tradestation.com/authorize?response_type=code&client_id=<api_key>&redirect_uri=http://localhost&audience=https://api.tradestation.com&scope=openid offline_access profile MarketData ReadAccount Trade Matrix OptionSpreads
+In this url, replace the <api_key> with the key that you received in the pdf file in section 1. This will take you to the Tradestation login page. After logging in with your normal username and password, the browser will redirect you to a url with a code:
+
+
+redirect url after login
+The webpage will say “Page Not Responding” but it’s ok, all you need now is to copy the string that comes after the “code=”. We will use this code(1) in the next step.
+
+After you have the code from the redirect url, make a POST request to https://signin.tradestation.com/oauth/token using the following command:
+
+curl -X POST https://signin.tradestation.com/oauth/token \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "code=<your code>" \
+     -d "grant_type=authorization_code" \
+     -d "client_id=<your api key>" \
+     -d "client_secret=<your api secret>" \
+     -d "redirect_url=localhost"
+Replace <your code> with the code you copied from the url, <your api key> with the api key you received in the pdf, and <your api secret> with the secret you received alongside the api key in the pdf in step 1.
+
+This should return:
+
+{
+    "access_token": "<access token>",
+    "refresh_token": "<refresh token>",
+    "id_token": "<id token>",
+    "scope": "openid profile MarketData ReadAccount Trade Matrix OptionSpreads offline_access",
+    "expires_in": 1200,
+    "token_type": "Bearer"
+}
+Take the refresh token and store in a secure place.
+
+3. Refreshing the access token
+So now that you have the refresh token, its easy to get an access token. All you need to do is make a POST request to https://signin.tradestation.com/oauth/token with
+
+headers = {
+    'content-type': 'application/x-www-form-urlencoded'
+}
+body = {
+    'grant_type': 'refresh_token',
+    'client_id': 'your api key',
+    'client_secret': 'your api secret',
+    'refresh_token': 'your refresh token'
+}
+This will return a new “access_token” in the response body. This access token will be good for 15 minutes until it expires and has to be refreshed again.
+
+Requesting historical intraday bars
+I wrote a python class that handles the authentication, retries on rate limit reached and can request bars for several days (and symbols) simultaneously using asyncio. It returns a pandas dataframe.
+
+To run this code you need to run the following command to install the required dependencies:
+
+pip install pandas aiohttp requests retry
+import asyncio
+import datetime
+import logging
+import os
+
+import aiohttp
+import pandas as pd
+import requests
+from aiohttp import ClientResponseError
+from requests import HTTPError
+from retry import retry
+
+logger = logging.getLogger(__name__)
+
+
+class TradestationAPI:
+    def __init__(self):
+        self.api_key = os.getenv("TS_API_KEY")
+        self.api_secret = os.getenv("TS_API_SECRET")
+        self.base_url = "https://signin.tradestation.com"
+        self.api_url = "https://api.tradestation.com/v3"
+        self.access_token = None
+        self._access_token_semaphore = asyncio.Semaphore(1)
+        self._access_token_last_refreshed = None
+        self.refresh_token = os.getenv("TS_REFRESH_TOKEN")  # Get refresh token from environment
+
+    @retry(TemporaryError, tries=3, delay=2, backoff=2)
+    def _refresh_access_token(self):
+        if self._access_token_last_refreshed and datetime.datetime.now() - datetime.timedelta(minutes=15) < self._access_token_last_refreshed:
+            return
+
+        token_url = f"{self.base_url}/oauth/token"
+        headers = {
+            'content-type': 'application/x-www-form-urlencoded'
+        }
+        data = {
+            'grant_type': 'refresh_token',
+            'client_id': self.api_key,
+            'client_secret': self.api_secret,
+            'refresh_token': self.refresh_token,
+        }
+        response = requests.post(token_url, headers=headers, data=data)
+        try:
+            response.raise_for_status()
+        except HTTPError as err:
+            logger.error(f"Error while refreshing access token: {err}")
+            if response.status_code >= 500:
+                raise TemporaryError(response.text)
+            else:
+                raise err
+
+        response = response.json()
+        self._access_token_last_refreshed = datetime.datetime.now()
+        self.access_token = response['access_token']
+
+    @retry(TemporaryError, tries=3, delay=2, backoff=2)
+    async def _request_endpoint(self, endpoint, params=None):
+        headers = {
+            'Authorization': f'Bearer {self.access_token}'
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(endpoint, headers=headers, params=params) as response:
+                try:
+                    response.raise_for_status()
+                except ClientResponseError as err:
+                    logger.error(f"Error while requesting endpoint: {err}")
+                    if err.status >= 500:
+                        raise TemporaryError(response.text)
+                    elif err.status in (401, 403):
+                        await self._access_token_semaphore.acquire()
+                        self._refresh_access_token()
+                        self._access_token_semaphore.release()
+                        return await self._request_endpoint(endpoint)
+                    elif err.status == 429:
+                        logger.warning("Rate limit exceeded. Waiting for 1 minute.")
+                        await asyncio.sleep(60)
+                        return await self._request_endpoint(endpoint)
+                    else:
+                        raise err
+
+                return await response.json()
+
+    async def get_intraday_data(self, symbols, dates):
+        if not self.access_token:  # If access token is not available
+            self._refresh_access_token()  # Refresh it
+        async def _req_symbol(symbol, date):
+            endpoint = f"{self.api_url}/marketdata/barcharts/{symbol}"
+            try:
+                bars = await self._request_endpoint(endpoint, params={
+                    'interval': 5,
+                    'unit': 'Minute',
+                    'lastdate': date.strftime("%Y-%m-%d"),
+                    'barsback': 78
+                })
+            except Exception as e:
+                return pd.DataFrame()
+            bars_df = pd.DataFrame.from_records(bars["Bars"])
+            bars_df["TimeStamp"] = pd.to_datetime(bars_df["TimeStamp"])
+            bars_df["TimeStamp"] = bars_df["TimeStamp"].dt.tz_convert("America/New_York").dt.tz_localize(None)
+            bars_df = bars_df.loc[:, ["TimeStamp", "Open", "High", "Low", "Close", "TotalVolume"]]
+            bars_df.rename(columns={"TimeStamp": "datetime", "Open": "open", "High": "high", "Low": "low", "Close": "close", "TotalVolume": "volume"}, inplace=True)
+            bars_df["symbol"] = symbol
+            return bars_df
+
+        tasks = [_req_symbol(symbol, date) for symbol, date in zip(symbols, dates)]
+        return pd.concat(await asyncio.gather(*tasks))
+Using the class to get the 5 minute intraday bars of AAPL and MSFT for the date 2022–05–02:
+
+from datetime import date
+import asyncio
+
+async def get_bars():
+  ts = TradestationAPI()
+  daily_candles = await ts.get_intraday_data(["AAPL", "MSFT"], [date(2022, 5, 2), date(2022, 5, 2)])
+  return daily_candles
+
+if __name__ == "__main__":
+  asyncio.run(get_bars())
+This returns:
+
+              datetime    open    high     low   close   volume symbol
+0  2022-05-02 09:35:00  156.79  158.04  156.63  156.76  3097713   AAPL
+1  2022-05-02 09:40:00  156.76  156.89  155.66  155.85  2592036   AAPL
+2  2022-05-02 09:45:00  155.86  157.76  155.31  157.48  2768261   AAPL
+3  2022-05-02 09:50:00  157.47  157.82  156.67  156.92  1774781   AAPL
+4  2022-05-02 09:55:00   156.9  157.02   156.3  156.93  1698737   AAPL
+..                 ...     ...     ...     ...     ...      ...    ...
+73 2022-05-02 15:40:00  284.27  284.45  283.05  283.32   310566   MSFT
+74 2022-05-02 15:45:00  283.47  283.88   282.2   282.2   329181   MSFT
+75 2022-05-02 15:50:00  282.19   283.4  281.93  283.35   351180   MSFT
+76 2022-05-02 15:55:00  283.27  284.64  283.27  284.53   614646   MSFT
+77 2022-05-02 16:00:00   284.5  284.94  284.09   284.6  1423670   MSFT
+Note: I chose to implement my class with asyncio so it runs fast for simultaneous day and symbol requesting which was convenient for my use case, you can also request more than 1 day at a time with tradestation API.
+
+Thanks for reading my post on how to get free intraday historical bars. Make sure to follow me for more algo-trading content. Coming up, I will show you how to detect resistance lines using python

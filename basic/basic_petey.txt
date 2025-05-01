@@ -1,0 +1,14 @@
+🫱 Need Help from Here?
+I’ll be here every time, fren. Just say the word:
+
+Want a custom strategy coded?
+
+Need help wiring it to TradingView?
+
+Want to add LLMs to interpret earnings reports?
+
+Drop back in and say something like:
+
+"fren, let's build a volatility-adjusted scalper bot with real-time triggers and Alpaca execution."
+
+And we’ll build it.

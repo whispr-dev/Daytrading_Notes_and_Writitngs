@@ -1,0 +1,1046 @@
+
+Write
+
+Tomthornto
+
+Member-only story
+
+Predicting Stock Prices with Numerai Signals and XGBoost
+Integrating YFinance Data, Feature Engineering, and Advanced Machine Learning Techniques for Financial Forecasting
+Jermaine Matthew
+Jermaine Matthew
+
+·
+Follow
+
+51 min read
+·
+Jul 31, 2024
+52
+
+
+2
+
+
+
+
+
+The primary objectives of this article is to obtain US stock price data through the YFinance API, integrate this data with the historical targets from Numerai Signals, undertake feature engineering with a focus on seasonal features, and employ the XGBoost modeling technique. There is also the option to submit results if one chooses to do so.
+
+In this Kaggle dataset titled YFinance Stock Price Data for Numerai Signals, I have retrieved stock price data on a daily basis using the YFinance API. For those who prefer not to utilize the API directly, this dataset is readily available and remains current.
+
+The inspiration for this content largely stems from a previous work by Jason Rosenfeld, which provides a comprehensive end-to-end notebook for Numerai Signals utilizing entirely free data from Yahoo Finance.
+
+With this overview provided, let us proceed to the main content.
+
+In this section, we will proceed to import the necessary libraries.
+
+!pip install numerapi==2.11.0
+import numerapi
+Initially, it installs a particular version (2.11.0) of a library known as numerapi, which functions as a client for the Numerai API. This library facilitates interaction with Numerai, a platform that hosts a data science tournament and operates as a hedge fund, relying on machine learning models for stock market predictions. By utilizing this package, users can leverage its features and functionalities, streamlining their ability to connect with and utilize the Numerai platform.
+
+Subsequently, following the installation, the code incorporates the numerapi library into the current Python environment. This import statement ensures that all functions, classes, and methods offered by the numerapi package are accessible for use within the users script or code.
+
+Utilizing this code is essential for developers, data scientists, or any individuals who wish to engage in the Numerai tournament. It provides the requisite tools for downloading data, submitting predictions, and managing various aspects of their participation on the platform.
+
+!pip install xgboost==1.3.0.post0
+This command is intended to install a specific version of the XGBoost library, a well-regarded open-source machine learning library noted for its speed and efficiency, especially in the context of gradient boosting.
+
+The command employs pip, the Python package installer, to retrieve and install the specified library from the Python Package Index (PyPI). By indicating xgboost==1.3.0.post0, the command guarantees that this exact version of the XGBoost library will be installed. This precision is crucial for ensuring compatibility with pre-existing code or libraries, particularly in collaborative or production environments where variations in library versions may cause discrepancies in functionality or lead to the emergence of bugs.
+
+The XGBoost library offers effective implementations of gradient boosting algorithms, which are extensively utilized for regression and classification tasks in machine learning. Its features include the ability to handle missing data, support for parallel computation, and regularization techniques to mitigate overfitting. These attributes make XGBoost a preferred choice among data scientists and machine learning professionals.
+
+# This Python 3 environment comes with many helpful analytics libraries installed
+# It is defined by the kaggle/python Docker image: https://github.com/kaggle/docker-python
+# For example, here's several helpful packages to load
+import os
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import gc
+import pathlib
+from tqdm.auto import tqdm
+import joblib
+import json
+from sklearn.decomposition import PCA, FactorAnalysis
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder
+from multiprocessing import Pool, cpu_count
+import time
+import requests as re
+from datetime import datetime
+from dateutil.relativedelta import relativedelta, FR
+# Input data files are available in the read-only "../input/" directory
+# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
+# visualize
+import matplotlib.pyplot as plt
+import matplotlib.style as style
+from matplotlib_venn import venn2, venn3
+import seaborn as sns
+from matplotlib import pyplot
+from matplotlib.ticker import ScalarFormatter
+sns.set_context("talk")
+style.use('seaborn-colorblind')
+import warnings
+warnings.simplefilter('ignore')
+First and foremost, the code imports a range of libraries essential for data manipulation, analysis, and visualization. Among these are numpy and pandas, which serve as crucial tools for numerical computing and data handling. Additionally, it utilizes gc for garbage collection to optimize memory usage; pathlib for managing file paths; and tqdm, which offers progress bars for iterative processes. Other libraries, such as joblib for object serialization and parallel processing, json for handling JSON data, and various functions from sklearn for advanced analytical techniques like Principal Component Analysis (PCA) and data scaling, are also included. Furthermore, requests enables the execution of HTTP requests, while datetime and dateutil assist with date and time operations. Visualization is addressed by integrating libraries like matplotlib and seaborn.
+
+The code is specifically tailored for a Kaggle environment, ensuring that all pre-installed libraries are readily accessible for users. There is a commented-out section that suggests reviewing input data files within a Kaggle kernel, which is a typical initial step in any data science undertaking.
+
+In terms of visualization, the script configures aesthetic elements, opting for the seaborn-colorblind style to enhance accessibility. It also incorporates settings to suppress warnings, which is a common practice to maintain a clean output during the development process.
+
+The inclusion of gc indicates a heightened awareness of memory management, which is vital when working with large datasets or engaging in resource-intensive processes on the Kaggle platform. Moreover, the presence of tqdm suggests that the project may involve lengthy operations or iterations, where a progress bar can significantly improve user experience by conveying the status of ongoing tasks.
+
+This code is indispensable as it lays a foundational framework for a data analysis project, preparing the environment by importing necessary libraries and establishing visual styles. This preparation allows users to concentrate on the analytical components without the distraction of setup challenges.
+
+By utilizing a standardized environment such as Kaggles, the code promotes collaboration among data scientists and analysts. This uniformity ensures that others can execute the code without complications related to missing libraries or conflicting versions.
+
+In terms of efficiency, tools and libraries like PCA or scaling techniques offered by sklearn facilitate more effective data handling, ensuring that subsequent analyses, model implementations, or visualizations are robust and accurate.
+
+Ultimately, this setup fosters a streamlined workflow, allowing for well-organized tasks where libraries are immediately available for use. This organization not only speeds up the process of iteration and experimentation but also enhances the overall data analysis experience.
+
+The configuration and logging setup has been designed to be straightforward.
+
+# config class
+class CFG:
+    """
+    Set FETCH_VIA_API = True if you want to fetch the data via API.
+    Otherwise we use the daily-updated one in the kaggle dataset (faster).
+    """
+    INPUT_DIR = '../input/yfinance-stock-price-data-for-numerai-signals'
+    OUTPUT_DIR = './'
+    FETCH_VIA_API = False
+    SEED = 46
+    DEBUG = False # True, test mode using small set of tickers
+The class encompasses several attributes. The INPUT_DIR variable is presumably designated for indicating the location of input data, specifically the stock price information, within a directory structure that is relative to the current working directory. Similarly, the OUTPUT_DIR attribute delineates the directory where the processed results will be stored, which is also relative to the current directory. The FETCH_VIA_API is a boolean attribute that decides whether the application should retrieve data through an application programming interface, which may entail slower operations and potential limitations, or rely on a previously downloaded and updated dataset, offering a more efficient alternative. The SEED parameter is typically employed in random number generation to facilitate reproducibility in experiments by establishing a specific seed value. In addition, the DEBUG boolean flag likely signifies whether the application is operating in debug mode, where a smaller subset of data is utilized, thereby assisting in testing and developmental activities.
+
+The principal function of this class is to centralize the configuration for the application, thereby providing a coherent and organized space for modifying settings without necessitating alterations to the main codebase. This design enables users to shift seamlessly between accessing data via an API and utilizing a local dataset, as well as to adjust file paths and set debugging preferences.
+
+The implementation of this type of configuration class is prevalent in programming, particularly within the realms of data science and machine learning. It assures that different components of the code can access and share consistent settings, thereby enhancing the readability of the code and facilitating more straightforward maintenance and modifications. By employing a configuration class, developers are able to rapidly modify parameters for various environments, such as transitioning from development to production, without the need to change the fundamental logic of the application.
+
+# Logging is always nice for your experiment:)
+def init_logger(log_file='train.log'):
+    from logging import getLogger, INFO, FileHandler,  Formatter,  StreamHandler
+    logger = getLogger(__name__)
+    logger.setLevel(INFO)
+    handler1 = StreamHandler()
+    handler1.setFormatter(Formatter("%(message)s"))
+    handler2 = FileHandler(filename=log_file)
+    handler2.setFormatter(Formatter("%(message)s"))
+    logger.addHandler(handler1)
+    logger.addHandler(handler2)
+    return logger
+logger = init_logger(log_file=f'{CFG.OUTPUT_DIR}/{today}.log')
+logger.info('Start Logging...')
+The functionality of the code involves several key steps. Initially, it imports essential components from the logging library, which is a built-in module in Python dedicated to logging messages. A logger is subsequently created using the getLogger function, which facilitates the capturing of log messages associated with a particular module, indicated by __name__. The loggers level is then set to INFO, enabling it to capture informational messages and those of a higher severity, including warnings and errors.
+
+In addition, two handlers are established. The first, a StreamHandler, is responsible for outputting log messages to the console, while the second, a FileHandler, writes log messages to a designated file, which defaults to train.log but can be customized as needed. Both handlers are formatted to present messages in a straightforward style, ensuring clarity. Once configured, these handlers are added to the logger, allowing it to direct messages to both the console and the designated log file. The logger is then initialized, and a message indicating the commencement of logging is recorded.
+
+The significance of this code lies in its ability to implement logging within experiments or applications. Logging assists in tracking the flow of execution and monitoring events, which proves invaluable for debugging and for gaining insights into the behavior of the code. Additionally, it provides a documented record of activities and states during execution, thereby simplifying the analysis and reproduction of results. Furthermore, logging supports the tracking of performance metrics and other pertinent information without cluttering the primary output or user interface. It also enables the communication of issues or significant events without disrupting the program flow.
+
+To begin, we will set up the Numerai signals API.
+
+This API offers various functionalities. It allows users to obtain a ticker map that connects yfinance data with historical targets from Numerai. Additionally, it provides access to historical targets and the ability to retrieve the model slot name and model ID, given that the private key and secret key are supplied.
+
+Furthermore, the API facilitates the submission of models, along with potentially offering additional features.
+
+To begin, it is important to obtain the ticker map for Numerai Signals. This will serve as the foundation for our subsequent analysis and discussions.
+
+napi = numerapi.SignalsAPI()
+logger.info('numerai api setup!')
+
+The code initializes an instance of the SignalsAPI class from the numerapi module, which is a library designed for interacting with Numerai, a platform focused on data science competitions. This initialization serves the purpose of facilitating access to the Numerai Signals API, which enables users to manage and submit their machine learning predictions associated with the competition.
+
+By creating an instance of the SignalsAPI, the user positions themselves to conduct various operations, including retrieving datasets, submitting predictions, and accessing performance metrics. This step is crucial for any future interactions with the Numerai platform, as it establishes a connection to the API.
+
+The log message stating numerai api setup! confirms that this setup process was completed successfully. This message aids in monitoring and debugging by notifying the user or developer that the API is ready for use. Such logging is particularly beneficial in larger applications where tracking the status of various components is vital.
+
+# read in list of active Signals tickers which can change slightly era to era
+eligible_tickers = pd.Series(napi.ticker_universe(), name='ticker') 
+logger.info(f"Number of eligible tickers: {len(eligible_tickers)}")
+
+The code snippet is intended to read a list of active stock tickers, which are symbols representing publicly traded companies, from a data source indicated as napi.ticker_universe(). Subsequently, the code converts this list into a Pandas Series, a structure that facilitates the handling and manipulation of the array of symbols. Furthermore, it logs the number of eligible tickers contained within the list.
+
+Initially, the code retrieves the current universe of eligible tickers by invoking the function napi.ticker_universe(). It is likely that this function is defined elsewhere in the codebase, and it is designed to obtain data that reflects the most active or relevant tickers according to specific market criteria.
+
+Upon retrieval, the code encapsulates the list of tickers within a Pandas Series. This encapsulation not only enhances data handling efficiency but also provides various functionalities for data manipulation, filtering, and analysis.
+
+Additionally, the code implements a logging mechanism to record the total count of eligible tickers. This information is vital for monitoring alterations in the universe of tickers over time, assisting users or developers in grasping the scale of the data being processed.
+
+There are several compelling reasons for the utilization of this segment of code. The dynamic nature of stock markets necessitates that tickers frequently change due to new listings, mergers, or delistings. This code ensures real-time updates to the list of tickers being analyzed. Moreover, by consolidating tickers into a Pandas Series, it establishes a foundation for subsequent data analysis tasks, thus enabling efficient querying and operations on the list.
+
+Furthermore, the logging feature enhances visibility regarding the number of tickers involved, which is essential for debugging and understanding market conditions.
+
+# read in yahoo to numerai ticker map, still a work in progress, h/t wsouza and 
+# this tickermap is a work in progress and not guaranteed to be 100% correct
+ticker_map = pd.read_csv('https://numerai-signals-public-data.s3-us-west-2.amazonaws.com/signals_ticker_map_w_bbg.csv')
+ticker_map = ticker_map[ticker_map.bloomberg_ticker.isin(eligible_tickers)]
+numerai_tickers = ticker_map['ticker']
+yfinance_tickers = ticker_map['yahoo']
+logger.info(f"Number of eligible tickers in map: {len(ticker_map)}")
+
+The code is designed to read and filter a mapping of tickers between Numerai and Yahoo Finance. This functionality is essential for individuals involved in financial data analysis or algorithmic trading on these platforms.
+
+The code begins by importing a CSV file from a specified URL. This file contains information about tickers, likely comprising rows that map a Numerai ticker to its corresponding Yahoo Finance ticker along with additional relevant details.
+
+Subsequently, the code filters the loaded data to retain only those tickers classified as eligible. The criteria for what constitutes an eligible ticker are presumably defined elsewhere in the code. This focused subset is vital for ensuring that any ensuing analyses or comparisons are valid and meet specific requirements.
+
+After the filtering process, the code extracts the ticker symbols for both Numerai and Yahoo Finance into distinct variables. This separation facilitates straightforward access to the tickers for any forthcoming operations or analyses.
+
+Furthermore, the code logs the number of tickers that successfully passed through the filtering process. This feature is important for tracking and debugging, as it allows users to ascertain how many tickers from the original dataset are eligible for further use.
+
+print(ticker_map.shape)
+ticker_map.head()
+
+The first function, ticker_map.shape, is used to obtain the dimensions of the data structure. Specifically, it returns two values representing the number of rows and columns. This information is valuable for gaining insights into the size and intricacy of the dataset, enabling users to quickly understand the volume of data they are handling.
+
+The second function, ticker_map.head(), displays the initial rows of the data structure, typically presenting the first five rows by default. This feature is particularly advantageous for providing a brief overview of the data, including its types, arrangement, and potential content. It allows users to visually assess the dataset, identify any irregularities or trends, and determine what further analyses might be needed.
+
+Collectively, these two functions are essential for exploring data, as they facilitate a swift understanding of the structure and content of a dataset prior to engaging in more comprehensive operations or analyses. Such initial evaluations are a commonplace first step in workflows related to data science and analysis.
+
+The ticker map is essential for ensuring a successful submission when utilizing data from yfinance. It serves the purpose of accurately identifying and mapping stock tickers, which is critical for effective data analysis and interpretation. Thus, having the ticker map readily available will enhance the accuracy of your submission.
+
+It is now time to acquire stock price data using the YFinance API, which can be accessed through the provided link. One advantage of utilizing this specific API is that it is available at no cost. However, one should also be aware that the data it provides may often lack completeness.
+
+For those seeking higher quality stock price data, it may be worth considering the option of purchasing data from Quandl. This source offers a more comprehensive dataset. Additional resources, such as a starter guide on using Quandl data, can be found through various forums and documentation available online.
+
+While high-quality data is undoubtedly valuable, beginners may benefit from commencing their exploration with the free resources available.
+
+# If you want to fetch the data on your own, you can use this function...
+def fetch_yfinance(ticker_map, start='2002-12-01'):
+    """
+    # fetch yfinance data
+    :INPUT:
+    - ticker_map : Numerai eligible ticker map (pd.DataFrame)
+    - start : date (str)
+    
+    :OUTPUT:
+    - full_data : pd.DataFrame ('date', 'ticker', 'close', 'raw_close', 'high', 'low', 'open', 'volume')
+    """
+    
+    # ticker map
+    numerai_tickers = ticker_map['ticker']
+    yfinance_tickers = ticker_map['yahoo']
+    # fetch
+    raw_data = yfinance.download(
+        yfinance_tickers.str.cat(sep=' '), 
+        start=start, 
+        threads=True
+    ) 
+    
+    # format
+    cols = ['Adj Close', 'Close', 'High', 'Low', 'Open', 'Volume']
+    full_data = raw_data[cols].stack().reset_index()
+    full_data.columns = ['date', 'ticker', 'close', 'raw_close', 'high', 'low', 'open', 'volume']
+    full_data['date'] = pd.to_datetime(full_data['date'], format='%Y-%m-%d').dt.strftime('%Y%m%d').astype(int)
+    
+    # map yfiance ticker to numerai tickers
+    full_data['ticker'] = full_data.ticker.map(
+        dict(zip(yfinance_tickers, numerai_tickers))
+    )
+    return full_data
+To begin with, the function requires as input a DataFrame termed ticker_map. This DataFrame includes pairs of Numerai-eligible tickers alongside their respective tickers from Yahoo Finance. Additionally, the function accepts a starting date, which defaults to December 1, 2002, for the purpose of retrieving historical data.
+
+The next step involves extracting the stock tickers from the provided ticker_map DataFrame. Specifically, it focuses on the Numerai tickers and their corresponding Yahoo Finance tickers.
+
+Following this extraction, the function employs the yfinance library to download price data for all the specified Yahoo tickers, commencing from the designated start date. To enhance the speed and efficiency of the data retrieval process, it utilizes multi-threading.
+
+Once the data is downloaded, it is restructured into a more organized format. This involves selecting relevant columns, including Adjusted Close, Close, High, Low, Open, and Volume. The data is subsequently stacked into a long-format DataFrame, effectively organizing it by date and ticker.
+
+Additionally, the function converts the date column into a specific integer format (YYYYMMDD), which may be preferred for subsequent data processing tasks.
+
+Finally, the function maps the retrieved Yahoo tickers back to their corresponding Numerai tickers. This step is crucial for maintaining consistency, thereby ensuring that the data is well-prepared for use in Numerai or similar applications.
+
+The primary objective of utilizing this function is to automate the collection of historical stock price data from Yahoo Finance, particularly for the purposes of the Numerai competition or other financial analysis endeavors. By streamlining the processes of data fetching, formatting, and mapping, the function allows analysts or data scientists to direct their efforts towards analysis rather than data retrieval.
+
+Furthermore, by permitting users to specify their ticker mappings and date ranges, the function offers flexibility and can be effectively reused across various datasets. This adaptability renders it a valuable asset for individuals engaged in financial modeling or quantitative finance.
+
+%%time
+if CFG.FETCH_VIA_API: # fetch data via api
+    logger.info('Fetch data via API...may take some time...')
+    !pip install yfinance==0.1.62
+    !pip install simplejson
+    import yfinance
+    import simplejson
+    
+    df = fetch_yfinance(ticker_map, start='2002-12-01')
+else: # loading from the kaggle dataset (https://www.kaggle.com/code1110/yfinance-stock-price-data-for-numerai-signals)
+    logger.info('Load data from the kaggle dataset...')
+#     df = pd.read_csv(pathlib.Path(f'{CFG.INPUT_DIR}/full_data.csv'))
+    try:
+        df = pd.read_parquet(pathlib.Path(f'{CFG.INPUT_DIR}/full_data.parquet'))
+    except: # no data loaded err somehow
+        # fetch data via kaggle API
+        from kaggle_secrets import UserSecretsClient
+        user_secrets = UserSecretsClient()
+        config = {}
+        config['username'] = user_secrets.get_secret("username")
+        config['key'] = user_secrets.get_secret("key")
+        import nbformat
+        KAGGLE_CONFIG_DIR = os.path.join(os.path.expandvars('$HOME'), '.kaggle')
+        os.makedirs(KAGGLE_CONFIG_DIR, exist_ok = True)
+        with open(os.path.join(KAGGLE_CONFIG_DIR, 'kaggle.json'), 'w') as f:
+            json.dump({'username': config['username'], 'key': config['key']}, f)
+        !chmod 600 {KAGGLE_CONFIG_DIR}/kaggle.json
+        !kaggle datasets download -d code1110/yfinance-stock-price-data-for-numerai-signals
+        !unzip yfinance-stock-price-data-for-numerai-signals.zip
+        !rm yfinance-stock-price-data-for-numerai-signals.zip
+        df = pd.read_parquet('full_data.parquet')        
+print(df.shape)
+df.head(3)
+
+This code snippet serves the purpose of retrieving stock price data using either an external API, specifically the yfinance library, or a dataset hosted on Kaggle, depending on the configuration variable identified as CFG.FETCH_VIA_API.
+
+The execution begins with a time measurement denoted by %%time, which records the duration required to complete the entire cell. This feature is beneficial for performance evaluation.
+
+Subsequently, the code evaluates the boolean configuration CFG.FETCH_VIA_API. When this configuration is set to true, the script proceeds to acquire data from the Yahoo Finance API. Conversely, if the configuration is set to false, it will attempt to load data from a local Kaggle dataset.
+
+In the event that the API is utilized, the script logs a message indicating that it will fetch data via the API, which may take a considerable amount of time. It proceeds to install the yfinance library, specifically version 0.1.62, along with simplejson, both of which are essential for accessing financial data and processing JSON data formats. The necessary libraries are then imported, and a function named fetch_yfinance is invoked to retrieve stock data based on a given ticker map and a specified starting date.
+
+If the script opts against using the API, it will log that it is retrieving data from a Kaggle dataset. It attempts to read a Parquet file titled full_data.parquet from a designated input directory. Should this attempt fail, for instance, if the file is not found, it prepares to fetch the dataset from Kaggles API. This process entails securely importing UserSecretsClient to access Kaggle API credentials, including the username and key, which are stored as user secrets. The script then creates a .kaggle directory for storing these credentials before writing them to a kaggle.json file, a requirement for authenticating with the Kaggle API. Additionally, it alters the file permissions to enhance security for these credentials, followed by downloading the specified Kaggle dataset and unzipping it, ultimately loading data from the unzipped Parquet file.
+
+In conclusion, the code outputs the dimensions of the DataFrame (df), indicating the number of rows and columns of the loaded data and displaying the first three rows of the DataFrame to provide an overview of the dataset.
+
+The fundamental purpose of this code is to facilitate data analysis tasks that necessitate stock price data. By providing a choice between data retrieval methods — either via an API or from a local dataset — it ensures that users can access the data in the most suitable and efficient manner, based on their specific environment and data availability. This adaptability promotes effective experimentation, analysis, and model development within finance-related projects, particularly in fields like quantitative finance or machine learning that leverage historical stock price data.
+
+df.tail(3)
+
+The code snippet you mentioned, df.tail(3), is a command commonly utilized in data analysis with the pandas library in Python. This command retrieves the last three rows of a DataFrame, which is a two-dimensional, flexible data structure capable of holding various types of data, organized in labeled rows and columns.
+
+By executing this command, a user can quickly examine the most recent entries in their dataset. This offers several advantages.
+
+First, it facilitates data verification, allowing analysts to confirm that the data has been loaded correctly and that the final entries are consistent with the overall context of the dataset. This provides a quick method for assessing the integrity of the data.
+
+Second, it aids in debugging. If there are concerns about the quality of the data, reviewing the tail end of the DataFrame can help identify any unusual values or inconsistencies that may have occurred, particularly in time series data.
+
+Additionally, for datasets that are time-dependent, viewing the latest data points can reveal important insights into recent trends or fluctuations.
+
+Lastly, this command streamlines the exploratory data analysis process. Rather than sifting through potentially thousands of rows, users can access the most recent entries quickly, making the exploration efficient and effective.
+
+In order to develop a supervised machine learning model, it is essential to have a target label, which is accessible through the Numerai Signals.
+
+It is important to recognize that there are two target columns: target and target_20d. The target column is commonly referred to as target_4d, indicating a shorter target duration. The values for both target columns become available only after they have been resolved, specifically 11 days for target_4d and 33 days for target_20d from the onset of the round. Due to the longer resolution period for target_20d, more recent dates will show a value of NaN for that column, whereas target_4d will have available values.
+
+%%time
+def read_numerai_signals_targets():
+    # read in Signals targets
+#     numerai_targets = 'https://numerai-signals-public-data.s3-us-west-2.amazonaws.com/signals_train_val.csv'
+    numerai_targets = 'https://numerai-signals-public-data.s3-us-west-2.amazonaws.com/signals_train_val_bbg.csv'
+    targets = pd.read_csv(numerai_targets)
+    
+    # to datetime int
+    targets['friday_date'] = pd.to_datetime(targets['friday_date'].astype(str), format='%Y-%m-%d').dt.strftime('%Y%m%d').astype(int)
+    
+#     # train, valid split
+#     train_targets = targets.query('data_type == "train"')
+#     valid_targets = targets.query('data_type == "validation"')
+    
+    return targets
+targets = read_numerai_signals_targets()
+
+The primary function implemented in the code is read_numerai_signals_targets(), which retrieves a CSV file from a specified URL. This file contains signal and target data pertinent to stock market predictions. The Pandas library is employed to read the data into a DataFrame using the read_csv function.
+
+Within the function, the code processes the friday_date field from the CSV file, converting it into a datetime format. Following this, the date is reformatted into a specific string format, namely YYYYMMDD, and subsequently transformed into an integer. This approach facilitates easier manipulation and computations in future analyses.
+
+The function concludes by returning the processed DataFrame, which contains the targets data. This data likely encompasses various columns utilized in training machine learning models.
+
+When the function is executed, the resulting DataFrame is assigned to the variable targets.
+
+The utility of this code is significant within the realms of data science and machine learning, particularly for financial predictions, as it prepares raw data for subsequent analysis. The stages of loading and preprocessing are critical for constructing reliable predictive models, discerning patterns within the data, and arriving at informed decisions based on those predictions. Maintaining consistency in date formatting is beneficial for time series analysis, whereas the separation of training and validation datasets, albeit commented out in this instance, is vital for effective model evaluation. Ultimately, this code serves as a foundational element for any analytical endeavors related to the dataset in question.
+
+# convert to numerai ticker, if the target ticker is not
+if 'bloomberg_ticker' in targets.columns.values.tolist():
+    targets['ticker'] = targets['bloomberg_ticker'].map(
+        dict(zip(ticker_map['bloomberg_ticker'], ticker_map['ticker']))
+    )
+if 'bloomberg_ticker' not in targets.columns.values.tolist():
+    targets['bloomberg_ticker'] = targets['ticker'].map(
+        dict(zip(ticker_map['ticker'], ticker_map['bloomberg_ticker']))
+    )
+    
+print(targets.shape, targets['friday_date'].min(), targets['friday_date'].max())
+targets.head()
+
+This code is designed to process a DataFrame referred to as targets, which holds information pertaining to financial tickers. The primary objective is to standardize the ticker format by converting between two representations: bloomberg_ticker and an alternative format referenced in ticker_map.
+
+Initially, the code checks for the existence of the bloomberg_ticker column within the targets DataFrame. The presence of this column determines the conversion approach to be applied. If the bloomberg_ticker column is available, the code generates a new column named ticker. It accomplishes this by mapping values from the bloomberg_ticker column to a standardized format created through a dictionary generated by combining two columns from the ticker_map DataFrame. In contrast, if the bloomberg_ticker column is absent, the code creates or populates this column by remapping the existing ticker column back to the bloomberg_ticker format.
+
+Subsequently, the code prints the dimensions of the targets DataFrame, in addition to the minimum and maximum values of the friday_date column. This provides a succinct overview of the data’s size and temporal range.
+
+In the final step, the code displays several rows from the targets DataFrame, permitting the user to review the outcomes of the processing operation.
+
+# there are train and validation...
+fig, ax = plt.subplots(1, 2, figsize=(16, 4))
+ax = ax.flatten()
+for i, data_type in enumerate(['train', 'validation']):
+    # slice
+    targets_ = targets.query(f'data_type == "{data_type}"')
+    logger.info('*' * 50)
+    logger.info('{} target: {:,} numerai tickers , {:,} bloomberg tickers (friday_date: {} - {})'.format(
+        data_type, 
+        targets_['ticker'].nunique(),
+        targets_['bloomberg_ticker'].nunique(),
+        targets_['friday_date'].min(),
+        targets_['friday_date'].max(),
+    ))
+    
+    # plot target
+#     ax[i].hist(targets_['target'])
+    ax[i].hist(targets_['target_20d'])
+    ax[i].set_title(f'{data_type}')
+
+This code snippet is designed for the analysis and visualization of targets from two distinct datasets: the training set and the validation set.
+
+Initially, the code establishes a visual framework by setting up a figure containing two side-by-side subplots. This arrangement is intended to provide a comparative analysis of the targets from the training and validation datasets.
+
+The code proceeds to iterate over the two dataset types, specifically train and validation. In each iteration, specific actions are executed that are tailored to the type of data currently being processed.
+
+Within this iterative process, the code extracts relevant portions of the main targets dataset, focusing on rows that correspond to the current data type. This extraction is accomplished through a query method, effectively filtering the dataset to obtain the necessary information.
+
+Additionally, the code captures and logs significant statistics. This includes the count of unique Numerai tickers and Bloomberg tickers, along with the range of Friday dates represented in the filtered dataset. Such statistics are vital for gaining a comprehensive understanding of both the scale and temporal dimensions of the data under analysis.
+
+The next step involves visualizing the targets. The code generates a histogram for the target_20d column of the current dataset, which serves to illustrate the distribution of these target values. This visualization provides valuable insights into the performance and characteristics of the prediction targets throughout the analyzed period.
+
+To enhance clarity, titles corresponding to each dataset type (train or validation) are assigned to the subplots. This addition facilitates easier comparison of the two distributions.
+
+# target relations
+d = pd.crosstab(
+    targets['target_4d']
+    , targets['target_20d']
+)
+d['sum'] = d.values.sum(axis=1)
+for i, f in enumerate(d.columns):
+    d[f] = d.apply(lambda row : 100*row[f]/row['sum'], axis=1)
+d.drop(columns=['sum'], inplace=True)
+print('target transition matrix (%)')
+d.astype(int).style.background_gradient(cmap='viridis', axis=1)
+
+The provided code snippet is crafted to generate a transition matrix that illustrates the percentage of instances in which targets move from one state to another over a designated time frame. This tool is particularly advantageous in contexts such as financial forecasting, marketing analysis, or other situations where it is essential to comprehend the changes that occur between different categories or states over time.
+
+Initially, the code creates a crosstabulation table that counts occurrences of two categorical variables from the targets dataset: target_4d and target_20d. This process effectively captures the number of instances corresponding to each combination of these two targets.
+
+Subsequently, a new column titled sum is introduced, containing the total count of occurrences for each row, which represents each unique state of target_4d. This step is significant as it provides a denominator for calculating the pertinent percentages in the following stage.
+
+The code then enters a loop, during which it iterates through the columns of the crosstab and performs a function that calculates the percentage representation of each value in relation to the overall total (the sum for that particular row). Essentially, for each state in target_4d, the code determines the percentage of total instances that correspond to each potential state in target_20d.
+
+After calculating the percentages, the column named sum is removed from the DataFrame, leaving only the calculated percentage values.
+
+The final output involves printing the transition matrix, with values formatted to enhance visualization through the application of a gradient color map. This visual representation emphasizes the variation across the different percentage values.
+
+The target data closely resembles that of the Numerai Tournament, in which participants are provided with both features and targets.
+
+It is important to point out that the division between training and validation data is determined by timestamps, implementing a Time-Series Split. The training data spans from January 31, 2003, to December 28, 2012, while the validation data commences on January 4, 2013.
+
+It is essential to assess the degree of overlap regarding the stock tickers within our yfiance stock data and the numerai targets. A minimum of five tickers is required to proceed with our submission.
+
+This analysis will ensure that we have sufficient overlap to meet the submission criteria effectively.
+
+# ticker overlap
+venn3(
+    [
+        set(df['ticker'].unique().tolist())
+        , set(targets.query('data_type == "train"')['ticker'].unique().tolist())
+        , set(targets.query('data_type == "validation"')['ticker'].unique().tolist())
+    ],
+    set_labels=('yf price', 'train target', 'valid target')
+)
+
+This code is crafted to visually depict the overlap among three sets of distinct stock tickers sourced from different datasets, utilizing a Venn diagram. The primary focus is on comparing unique stock tickers present in one dataset against those found in training and validation datasets obtained from an alternative source.
+
+Initially, the code establishes three sets of tickers. The first set is composed of unique stock tickers from a DataFrame identified as df. The second set is formed from a subset of another DataFrame referred to as targets, with a filter applied to include only those rows categorized as train. The third set is similarly extracted from the targets DataFrame, but specifically includes only rows marked as validation.
+
+Subsequently, the venn3 function is invoked, using these three sets as inputs. This function is specifically designed to create a three-circle Venn diagram, enabling a clear visual representation of the relationships and intersections among the sets.
+
+Each circle in the Venn diagram is appropriately labeled to indicate the source of the respective set: one represents the tickers from the df DataFrame, another corresponds to the training target set, and the last pertains to the validation target set.
+
+# select target-only tickers
+df = df.loc[df['ticker'].isin(targets['ticker'])].reset_index(drop=True)
+print('{:,} tickers: {:,} records'.format(df['ticker'].nunique(), len(df)))
+
+This code snippet is designed to filter a DataFrame referred to as df, ensuring it only contains records where the ticker values correspond to those listed in another DataFrame known as targets.
+
+The process begins with the filtering step. The code employs the isin() method to ascertain if each ticker in the primary DataFrame df is present in the ticker column of the targets DataFrame. This method successfully selects only those rows that meet this criterion.
+
+Following the filtering operation, the code applies the reset_index(drop=True) method. This method is employed to reindex the filtered DataFrame, with the drop=True argument ensuring that the original index is eliminated rather than being retained as a new column.
+
+In the subsequent stage, the code generates a formatted string that displays the number of unique tickers alongside the total number of records in the filtered DataFrame. To achieve this, the nunique() method is utilized to count the distinct ticker values, while the length function (len()) accounts for the total number of records.
+
+As previously stated, the yfiance stock data appears to be incomplete. It is important to examine whether we possess a sufficient number of records for each ticker.
+
+record_per_ticker = df.groupby('ticker')['date'].nunique().reset_index().sort_values(by='date')
+record_per_ticker
+
+This code is intended to analyze a dataset, presumably a DataFrame in Python utilizing the Pandas library, that encompasses financial information with a particular emphasis on stock tickers and their corresponding dates.
+
+The first step undertaken by the code involves grouping the dataset according to the ticker column, which signifies various stock or company identifiers. Consequently, all entries related to a particular stock ticker are amalgamated into a single group.
+
+Subsequently, the code counts the number of unique dates associated with each group. This process employs the nunique() function, which assists in determining the distinct trading days or reporting dates pertinent to each stock.
+
+Following the computation of these counts, the code invokes the reset_index() function. This action reformats the grouped data back into a DataFrame structure, ensuring that the resulting output features a standard index beginning from zero.
+
+In the final stage, the results are arranged in ascending order based on the count of unique dates. This organization facilitates an easy visual comparison of which stock tickers possess data for the least or greatest number of unique dates.
+
+record_per_ticker['date'].hist()
+print(record_per_ticker['date'].describe())
+
+
+This code snippet is intended for data visualization and statistical analysis of a dataset characterized by specific stock tickers, with a focus on the date column.
+
+Initially, the command record_per_ticker[date].hist() creates a histogram of the date column within the DataFrame referred to as record_per_ticker. This histogram provides a visual representation of the distribution of dates in the dataset, enabling users to discern patterns, such as the dates that feature the most records and the overall temporal spread of the data.
+
+Following this, the command print(record_per_ticker[date].describe()) offers a summary of statistical information for the date column. This summary includes essential details, such as the total count of entries, the number of unique dates, the most frequently occurring date, and the range of the data. Such statistics enhance the understanding of the dataset’s structure and characteristics, including the distribution of dates, the identification of any outliers, and the overall complexity of the data.
+
+This code is beneficial for several reasons. It aids analysts and developers in grasping the temporal dimensions of the dataset, which is vital for conducting time-series analysis in the financial domain. Additionally, by visualizing the data through a histogram and reviewing the associated statistics, users can uncover trends, patterns, or anomalies that may warrant further examination.
+
+Moreover, comprehending the distribution and summary statistics is crucial prior to engaging in more intricate analyses or modeling. This understanding informs decisions related to data cleaning and preprocessing. Lastly, descriptive statistics serve to identify any discrepancies or issues within the date data, such as unexpected gaps or the presence of duplicate entries.
+
+Regrettably, there are certain tickers that have a limited number of records available.
+
+In this analysis, I will only include tickers that possess more than 1,000 records.
+
+if CFG.DEBUG: # debug mode, using small set of data
+    tickers_with_records = record_per_ticker.query('date >= 4830')['ticker'].values
+else:
+    tickers_with_records = record_per_ticker.query('date >= 1000')['ticker'].values
+df = df.loc[df['ticker'].isin(tickers_with_records)].reset_index(drop=True)
+print('Here, we use {:,} tickers: {:,} records'.format(df['ticker'].nunique(), len(df)))
+
+This segment of code forms part of a more extensive program aimed at processing financial or stock market data, with a particular emphasis on filtering and analyzing records concerning various stock tickers.
+
+The primary objective of this code is to determine which stock tickers should be included in a dataset, depending on the current operational mode — either debug mode or production mode. When the debug mode is activated, as indicated by CFG.DEBUG being set to True, the code focuses its analysis on a subset of the data. Specifically, it selects records from the record_per_ticker dataset that have a date number greater than or equal to 4830. This approach facilitates quicker testing and debugging by using a smaller, more manageable dataset, which is advantageous for processing efficiency.
+
+On the other hand, when the code operates in normal mode, it accesses a broader dataset, selecting records with a date number greater than or equal to 1000. This method enables comprehensive analysis due to the availability of a larger set of data points, which can yield more robust insights.
+
+Following the identification of relevant tickers based on the operational mode, the code further filters the main DataFrame (df). It retains only those tickers that are found in tickers_with_records and resets the index of this filtered DataFrame, ensuring that it is well-organized and prepared for subsequent processing.
+
+The code prints a summary message that provides information about the number of unique tickers and the total count of records included in the filtered DataFrame. This summary is crucial for gaining an understanding of the data scope being analyzed and for confirming the successful execution of the filtering process.
+
+Feature Engineering
+We have now arrived at the machine learning component of our project. In this stage, we will create a set of features related to stock prices. It is important to keep in mind certain considerations during this process.
+
+One key principle is the avoidance of data leakage. This means that we must not incorporate any features that rely on future information, as our objective is to develop a forecasting system. Additionally, the features we create should exhibit stationarity, which ensures that their statistical properties remain consistent over time.
+
+The methodology for our feature engineering is based on the insights provided in the J-Quants Tournament. Although the original content is presented in Japanese, it is regarded as one of the finest references for feature engineering within the financial sector.
+
+As an enhancement, I will also include the Relative Strength Index (RSI) and the Moving Average Convergence Divergence (MACD, also known as PPO) features.
+
+The process of generating features is carried out for each ticker in a repetitive manner. To improve efficiency, we will implement parallel processing to expedite this phase of our work.
+
+# recent friday date?
+recent_friday = datetime.now() + relativedelta(weekday=FR(-1))
+recent_friday = int(recent_friday.strftime('%Y%m%d'))
+print(f'Most recent Friday: {recent_friday}')
+
+This code is crafted to determine and present the date of the most recent Friday in a specified format. The execution of this task is outlined as follows.
+
+Initially, the code acquires the current date and time by employing the datetime.now() function, which retrieves the present system date and time.
+
+To identify the most recent Friday, it leverages a function from the dateutil library, specifically relativedelta(), in conjunction with a weekday specification. The argument FR(-1) instructs the code to search for the most recent Friday in relation to the current date, thereby enabling it to adjust the date backward to ascertain the last occurrence of Friday.
+
+Upon establishing the date of the recent Friday, the code proceeds to format this information into an integer representation (YYYYMMDD) through the strftime() method. This transformation yields a more concise numerical format, which is typically favored for storage or display due to its enhanced ease of sorting and comparison.
+
+# in case no recent friday is available...prep the second last
+recent_friday2 = datetime.now() + relativedelta(weekday=FR(-2))
+recent_friday2 = int(recent_friday2.strftime('%Y%m%d'))
+print(f'Second most recent Friday: {recent_friday2}')
+
+The purpose of this code is to ascertain the date of the second most recent Friday relative to the current date and present it in a specified numeric format.
+
+To accomplish this task, the code utilizes the datetime module to retrieve the current date and time. It further employs the relativedelta function from the dateutil library for date manipulation, specifically to identify Fridays. The notation FR(-2) is used to specify that the code is searching for the Friday that occurred two weeks prior.
+
+Once the date is obtained, it is then formatted as a string in the YYYYMMDD structure through the strftime method. The formatted string is subsequently converted into an integer, which is printed to signify that it denotes the second most recent Friday.
+
+This code is particularly useful in situations where analysis or reporting requires reference to specific timeframes, especially in weekly or bi-weekly intervals. By enabling access to historical dates such as the second most recent Friday, it supports comparisons, report generation, and the execution of actions based on past occurrences, rather than solely depending on the current date.
+
+# fix market-not-open-on-Friday problem
+if CFG.DEBUG == False:
+    if np.sum(df['friday_date'] == recent_friday) < 4000:
+        previous_tickers = set(df.query('friday_date == @recent_friday2')['ticker']) 
+        current_tickers = set(df.query('friday_date == @recent_friday')['ticker'])
+        missing_df = pd.DataFrame()
+        missing_df['ticker'] = list(previous_tickers - current_tickers)
+        for d in ['date', 'friday_date']:
+            missing_df[d] = recent_friday
+        
+        # concat
+        orig_shape = df.shape
+        df = pd.concat([df, missing_df]).sort_values(by=['ticker', 'friday_date']).fillna(method='ffill')
+        del missing_df
+        print('Resolving missing tickers due to market-not-open-on-friday issue: df shape {} => {}'.format(
+            orig_shape, df.shape
+        ))
+
+The code in question addresses an issue related to stock tickers in a dataset, particularly when financial markets are closed on Fridays. It specifically checks for instances where the dataset contains fewer than 4,000 entries for a recent Friday. Should this situation arise, it implies that some stock tickers, which were present in the dataset on the preceding Friday, may be missing due to the market closure.
+
+To rectify this problem, the code undertakes several actions. Firstly, it identifies the tickers that were recorded on the previous Friday but are not included in the current dataset. This is achieved by comparing the two sets of tickers from both Fridays.
+
+Next, the code creates a new DataFrame designed to accommodate the identified missing tickers, alongside the date corresponding to the Friday in question. Following this, the code combines this new DataFrame containing the missing tickers with the original dataset. It organizes the combined dataset by the ticker and Fridays date, ensuring that any gaps in the data are filled through a method known as forward fill (ffill).
+
+Finally, the code logs the changes by printing both the original and updated shapes of the DataFrame, thereby facilitating tracking of any modifications made to the dataset.
+
+Are you prepared to engage in feature engineering?
+
+# technical indicators
+def RSI(close: pd.DataFrame, period: int = 14) -> pd.Series:
+    # https://gist.github.com/jmoz/1f93b264650376131ed65875782df386
+    """See source https://github.com/peerchemist/finta
+    and fix https://www.tradingview.com/wiki/Talk:Relative_Strength_Index_(RSI)
+    Relative Strength Index (RSI) is a momentum oscillator that measures the speed and change of price movements.
+    RSI oscillates between zero and 100. Traditionally, and according to Wilder, RSI is considered overbought when above 70 and oversold when below 30.
+    Signals can also be generated by looking for divergences, failure swings and centerline crossovers.
+    RSI can also be used to identify the general trend."""
+    delta = close.diff()
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    _gain = up.ewm(com=(period - 1), min_periods=period).mean()
+    _loss = down.abs().ewm(com=(period - 1), min_periods=period).mean()
+    RS = _gain / _loss
+    return pd.Series(100 - (100 / (1 + RS)))
+def EMA1(x, n):
+    """
+    https://qiita.com/MuAuan/items/b08616a841be25d29817
+    """
+    a= 2/(n+1)
+    return pd.Series(x).ewm(alpha=a).mean()
+def MACD(close : pd.DataFrame, span1=12, span2=26, span3=9):
+    """
+    Compute MACD
+    # https://www.learnpythonwithrune.org/pandas-calculate-the-moving-average-convergence-divergence-macd-for-a-stock/
+    """
+    exp1 = EMA1(close, span1)
+    exp2 = EMA1(close, span2)
+    macd = 100 * (exp1 - exp2) / exp2
+    signal = EMA1(macd, span3)
+    return macd, signal
+def feature_engineering(ticker='ZEAL DC', df=df):
+    """
+    feature engineering
+    
+    :INPUTS:
+    - ticker : numerai ticker name (str)
+    - df : yfinance dataframe (pd.DataFrame)
+    
+    :OUTPUTS:
+    - feature_df : feature engineered dataframe (pd.DataFrame)
+    """
+    # init
+    keys = ['friday_date', 'ticker']
+    feature_df = df.query(f'ticker == "{ticker}"')
+    
+    # price features
+    new_feats = []
+    for i, f in enumerate(['close', ]):
+        for x in [20, 40, 60, ]:
+            # return
+            feature_df[f"{f}_return_{x}days"] = feature_df[
+                f
+            ].pct_change(x)
+            # volatility
+            feature_df[f"{f}_volatility_{x}days"] = (
+                np.log1p(feature_df[f])
+                .pct_change()
+                .rolling(x)
+                .std()
+            )
+        
+            # kairi mean
+            feature_df[f"{f}_MA_gap_{x}days"] = feature_df[f] / (
+                feature_df[f].rolling(x).mean()
+            )
+            
+            # features to use
+            new_feats += [
+                f"{f}_return_{x}days", 
+                f"{f}_volatility_{x}days",
+                f"{f}_MA_gap_{x}days",
+                         ]
+    # RSI
+    feature_df['RSI'] = RSI(feature_df['close'], 14)
+    # MACD
+    macd, macd_signal = MACD(feature_df['close'], 12, 26, 9) 
+    feature_df['MACD'] = macd
+    feature_df['MACD_signal'] = macd_signal
+    new_feats += ['RSI', 'MACD', 'MACD_signal']
+    # only new feats
+    feature_df = feature_df[new_feats + keys]
+    # fill nan
+    feature_df.fillna(method='ffill', inplace=True) # safe fillna method for a forecasting task
+    feature_df.fillna(method='bfill', inplace=True) # just in case ... making sure no nan
+    return feature_df
+def add_features(df):
+    # FE with multiprocessing
+    tickers = df['ticker'].unique().tolist()
+    print('FE for {:,} stocks...using {:,} CPUs...'.format(len(tickers), cpu_count()))
+    start_time = time.time()
+    with Pool(cpu_count()) as p:
+        feature_dfs = list(tqdm(p.imap(feature_engineering, tickers), total=len(tickers)))
+    return pd.concat(feature_dfs)
+This code offers a collection of functions designed to calculate technical indicators that are frequently utilized in financial analysis and trading, facilitating informed decision-making. The primary indicators encompassed include the Relative Strength Index (RSI), the Moving Average Convergence Divergence (MACD), and Exponential Moving Averages (EMA). Additionally, the code features a function for feature engineering, which processes and computes supplementary metrics derived from stock price data.
+
+The process begins with the calculation of the Relative Strength Index. This function computes the RSI by first determining the price changes from closing prices, subsequently distinguishing between gains and losses from these changes. The gains and losses are then smoothed through the application of an exponentially weighted moving average, ultimately yielding the RSI value that indicates whether an asset is overbought or oversold.
+
+Next, the Exponential Moving Average is computed through another function, which assesses a series of closing prices over a predetermined period. This calculation is instrumental in identifying trends based on historical price movements.
+
+The Moving Average Convergence Divergence calculation involves computing two EMAs, representing short-term and long-term trends. The MACD line is derived from the difference between these two EMAs, and a signal line is generated through the application of a further EMA to the MACD line, which aids in formulating buy or sell signals.
+
+Furthermore, the feature engineering function processes stock data in conjunction with a specified ticker name, creating new features that reflect past price performance. These features may include returns, volatility, and mean gaps from the moving average. The computation of RSI and MACD indicators is integrated into this feature set, and the function accommodates missing values through forward-filling and backward-filling methods.
+
+To enhance efficiency, the code features a function that permits the simultaneous processing of multiple tickers using multiprocessing. This function applies the feature engineering process to each unique stock ticker present in the dataset, thereby significantly expediting the calculations.
+
+The utility of this code is manifold. Investors and traders leverage these technical indicators to evaluate historical price trends to identify potential market entry and exit points. Adequate data preparation is vital prior to machine learning model application or algorithmic trading, and this code automates the extraction of relevant features from raw financial data. The implementation of multiprocessing further enhances computational efficiency, which is particularly beneficial when navigating large datasets or an extensive number of tickers. Ultimately, the feature-engineered data generated through this process offers actionable insights that support informed investment decisions based on measurable market behaviors.
+
+%%time
+feature_df = add_features(df)
+del df
+gc.collect()
+
+This code snippet operates within a data processing environment, likely utilizing Python, and it focuses on the effective management of resources while enhancing a dataset.
+
+Initially, the execution time of the code block is measured through the use of the %%time magic command. This feature serves as a valuable tool for performance profiling, allowing users to determine the duration required to execute the subsequent operations.
+
+Following this, the line feature_df = add_features(df) indicates that a function named add_features is being invoked with an input DataFrame referred to as df. This function presumably performs transformations or augments the data, ultimately generating new features that can be utilized for further analysis or modeling. The outcome of this operation is stored in a new variable, feature_df, which now contains the enhanced dataset.
+
+The subsequent action of executing del df removes the original DataFrame from memory. This measure is taken to optimize memory resources, an important consideration when dealing with large datasets, as it mitigates potential memory overflow problems.
+
+Moreover, the function call to gc.collect() explicitly activates Python’s garbage collector. This step ensures the reclamation of any memory that was previously allocated to the original DataFrame or other unreferenced objects. Such a practice is essential in operations that require substantial resources, as it helps sustain system performance and stability by proactively managing memory consumption.
+
+The necessity for this code is particularly evident in data-intensive applications, such as machine learning workflows or data analysis tasks, where maximizing memory usage and processing efficiency is imperative. This code effectively integrates efficient feature engineering with proactive memory management, thereby facilitating the handling of larger datasets while maintaining performance.
+
+# do we have enough overlap with respect to 'friday_date'?
+venn2([
+    set(feature_df['friday_date'].astype(str).unique().tolist())
+    , set(targets['friday_date'].astype(str).unique().tolist())
+], set_labels=('features_days', 'targets_days'))
+
+The code is designed to analyze the overlap between two sets of unique friday_date entries originating from two distinct data sources: feature_df and targets. Its primary function is to visualize the number of distinct friday_date values present in each dataset while identifying any common dates between them.
+
+To achieve this, the code employs a Venn diagram, which provides a clear visual representation of the relationship between the dates found in feature_df, referred to as features_days, and those in targets, designated as targets_days. The Venn diagram features three distinct areas: one for dates that are unique to feature_df, another for dates unique to targets, and a third area that highlights dates common to both datasets.
+
+This analysis holds significance for several reasons. Firstly, it serves as a means of data validation, ensuring that the feature data and target data are aligned with respect to the timeframes they cover. This alignment is crucial for any tasks where timing plays a significant role. Secondly, in the context of machine learning and data analysis, an understanding of the overlap between these datasets enhances decision-making concerning the availability of data, which is essential for training and testing models. Lastly, by examining both the overlapping and unique entries, stakeholders can gain valuable insights into data completeness, identify potential gaps, and uncover issues related to data collection.
+
+# do we have enough overlap with respect to 'ticker'?
+venn2([
+    set(feature_df['ticker'].astype(str).unique().tolist())
+    , set(targets['ticker'].astype(str).unique().tolist())
+], set_labels=('features_ticker', 'targets_ticker'))
+
+This code serves the purpose of visualizing the overlap between two sets of unique ticker values derived from different datasets, referred to as feature_df and targets.
+
+To begin, the code prepares the data by converting the ticker column from both datasets into sets containing unique values. This conversion is essential, as sets facilitate straightforward comparisons of distinct items without the issue of duplicates.
+
+Following the data preparation, the code generates a Venn diagram that comprises two circles — one representing the unique tickers from feature_df and the other from targets. This diagram offers a visual representation of the number of ticker symbols that are exclusive to each dataset, as well as the quantity that is shared between them.
+
+Moreover, the sets are appropriately labeled to clarify which section of the diagram corresponds to the tickers from each dataset.
+
+# merge
+feature_df['friday_date'] = feature_df['friday_date'].astype(int)
+targets['friday_date'] = targets['friday_date'].astype(int)
+feature_df = feature_df.merge(
+    targets,
+    how='left',
+    on=['friday_date', 'ticker']
+)
+print(feature_df.shape)
+feature_df.tail()
+
+The purpose of this code is to carry out a data merging operation between two datasets: feature_df and targets. This process involves several important steps and serves a significant purpose in the analysis.
+
+Initially, the code prepares the data by converting the friday_date column in both the feature_df and targets DataFrames from their original types to integers. This conversion is crucial to ensure the merging process is effective, especially when working with date values that might exist in various formats, such as strings or datetime objects. By converting these values into integers, the code establishes a uniform format, which enhances the reliability of the merging operation.
+
+Subsequently, the code employs the merge function to combine the two DataFrames. Specifically, it utilizes a left join that is based on two keys: friday_date and ticker. In the context of a left join, all records from feature_df, referred to as the left DataFrame, are preserved, while the records from the targets DataFrame, the right side of the merge, are matched according to the specified keys. In instances where there are no corresponding records in targets, the resulting DataFrame will still include all records from feature_df. However, for those unmatched records, the additional columns sourced from targets will display as NaN, indicating missing values.
+
+Following the merging process, the shape of the resulting feature_df DataFrame is printed, providing insights on the number of rows and columns present after the merge. The code also displays the last few entries of feature_df, offering a brief view of the DataFrames structure post-merge.
+
+# save (just to make sure that we are on the safe side if yfinance is dead some day...)
+feature_df.to_pickle(f'{CFG.OUTPUT_DIR}/feature_df.pkl')
+feature_df.info()
+
+The code excerpt is part of a data processing workflow implemented in Python, which appears to be associated with financial data analysis through the use of the yfinance library.
+
+The initial line of the code is responsible for saving a DataFrame, likely encompassing features or data obtained via yfinance, to a file in a serialized format, specifically a pickle file. This action allows the user to preserve the current state of their data, facilitating future retrieval without the need to repeat the data fetching or processing steps. Such a measure is particularly crucial in cases where the data source, in this instance yfinance, may become unavailable, or if the reconstruction of the DataFrame from the beginning would be time-intensive or computationally burdensome.
+
+Following this, the code invokes the info() method on the DataFrame. This method offers a succinct overview of the DataFrames structure, including details such as the total number of entries, the data types of each column, and the memory usage associated with them. This summary is beneficial for gaining insight into the datas composition as well as for debugging purposes.
+
+We have successfully consolidated the features and target data into a single table. This preparation indicates that we are now poised to proceed with the modeling phase.
+
+At last, we have reached the modeling stage.
+
+In this phase, we will be utilizing XGBoost as our chosen method. The Integration-Test informed us the hyperparameters we will employ, which serves as a notable example and a robust baseline for the Numerai Tournament.
+
+target = 'target_20d'
+targets = [f for f in feature_df.columns if ('target' in f) & ('d' in f)]
+if 'target_20d' not in feature_df.columns.values.tolist():
+    print('No target 20d exists...using target_4d instead...')
+    target = 'target'
+drops = ['data_type', 'friday_date', 'ticker', 'bloomberg_ticker'] + targets
+features = [f for f in feature_df.columns.values.tolist() if f not in drops]
+logger.info('{:,} features: {}'.format(len(features), features))
+
+It functions primarily to prepare the dataset for further analysis or modeling.
+
+Initially, the code establishes a variable called target, assigning it the value target_20d. This likely designates a specific feature within the dataset that the analysis will focus on.
+
+Subsequently, a list known as targets is created. This list identifies all columns within a DataFrame named feature_df that include both target and d in their titles. This filtering process aims to isolate columns that are presumably linked to various target timeframes or metrics.
+
+The code then verifies whether the specific target target_20d is present among the columns in feature_df. In the event that this target is absent, the code reverts to a more general alternative by changing the target variable to target. This contingency ensures that the workflow can proceed uninterrupted, even if the preferred target variable is not available.
+
+Furthermore, the code delineates a list titled drops, which encompasses certain column names considered unnecessary or irrelevant for the subsequent analysis. This includes metadata-type columns such as data_type, friday_date, ticker, and bloomberg_ticker, in addition to any identified target columns from the targets list.
+
+Following this, a list named features is compiled, which includes all column names from feature_df that do not appear in the drops list. This focused approach ensures that the analysis utilizes only relevant data, thereby enhancing the efficiency of any modeling or analytical efforts.
+
+Lastly, the code maintains a log of the total number of features retained after the filtering process, providing a formatted output that enumerates the features along with their names. This logging activity is beneficial for understanding the structure of the dataset post-processing.
+
+# train-valid split
+train_set = {
+    'X': feature_df.query('data_type == "train"')[features], 
+    'y': feature_df.query('data_type == "train"')[target].astype(np.float64)
+}
+val_df = feature_df.query('data_type == "validation"').dropna().copy()
+val_set = {
+    'X': val_df[features], 
+    'y': val_df[target].astype(np.float64)
+}
+assert train_set['y'].isna().sum() == 0
+assert val_set['y'].isna().sum() == 0
+It begins by extracting the training set from a DataFrame known as feature_df, which contains both features and target values labeled as train and validation.
+
+Initially, the code performs data extraction by utilizing filtering queries to distinguish the data according to a specific column, data_type, which indicates whether a row pertains to the training or validation dataset. Specifically, the training data is isolated by filtering for rows tagged with train, while the validation data is similarly filtered for those marked as validation.
+
+Subsequently, the code organizes the training and validation datasets into dictionaries. These dictionaries include a key labeled X, which houses the features derived from the relevant DataFrame, and a second key, y, which contains the target values. The target values are converted to the np.float64 data type, ensuring they are appropriately formatted for analysis and modeling purposes.
+
+Prior to proceeding with the analysis, the code conducts a check for any missing values (NaNs) within the target values of both the training and validation sets. The use of assert statements guarantees that there are no missing target values in either dataset. This step is vital for the processes of model training and evaluation, as the presence of missing values can lead to errors or biases within the machine learning algorithms.
+
+# same parameters of the Integration-Test
+import joblib
+from sklearn import utils
+import xgboost as xgb
+import operator
+params = {
+    'objective': 'reg:squarederror',
+    'eval_metric': 'rmse',
+    'colsample_bytree': 0.1,                 
+    'learning_rate': 0.01,
+    'max_depth': 5,
+    'seed': 46,
+    'n_estimators': 2000,
+#     'tree_method': 'gpu_hist' # if you want to use GPU ...
+}
+# define 
+model = xgb.XGBRegressor(**params)
+# fit
+model.fit(
+    train_set['X'], train_set['y'], 
+    eval_set=[(val_set['X'], val_set['y'])],
+    verbose=100, 
+    early_stopping_rounds=100,
+)
+# save model
+joblib.dump(model, f'{CFG.OUTPUT_DIR}/xgb_model_val.pkl')
+logger.info('xgb model with early stopping saved!')
+# feature importance
+importance = model.get_booster().get_score(importance_type='gain')
+importance = sorted(importance.items(), key=operator.itemgetter(1))
+feature_importance_df = pd.DataFrame(importance, columns=['features', 'importance'])
+
+Initially, the code defines a series of parameters for the XGBoost model. These parameters govern various aspects of the training process, including the learning rate, the maximum depth of the trees, sample proportions, and the objective of minimizing the root mean squared error (RMSE). Such parameterization is essential for enhancing the accuracy and performance of the model.
+
+Subsequently, the code initializes an XGBoost regressor with the defined parameters, which will guide the training process. During this stage, the model is fitted to a designated training dataset that comprises features and corresponding target values. A validation dataset is also employed, enabling real-time evaluation of the models performance throughout the training phase. An early stopping mechanism is included, allowing the training to cease if there is no improvement in the validation set performance over a predetermined number of rounds. This approach is beneficial in preventing overfitting to the training data.
+
+Once the training is completed, the model is saved to disk using the joblib library. This functionality facilitates future use of the model without necessitating retraining, which is often time-consuming.
+
+Furthermore, the code includes provisions for calculating and sorting feature importance scores. This analysis reveals which features play a significant role in the models predictions, thus offering valuable insights into the factors influencing the outcomes. The results are compiled into a DataFrame for enhanced readability and analysis.
+
+The necessity of this code is multifaceted. It supports the development and deployment of predictive models using XGBoost, a method recognized for its high performance and efficiency. The implementation of early stopping serves to optimize the models generalization capabilities and mitigate the risk of overfitting. Additionally, saving the model allows for seamless reuse and integration into applications, reducing redundancy in the training process. Finally, the feature importance analysis contributes to a deeper understanding of the predictors with the greatest impact on the results, providing actionable insights for users.
+
+# feature importance
+fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+sns.barplot(
+    x='importance', 
+    y='features', 
+    data=feature_importance_df.sort_values(by='importance', ascending=False),
+    ax=ax
+)
+
+By generating a horizontal bar plot, it effectively highlights the relative importance of each feature, thereby facilitating a clearer interpretation of which features most significantly influence the predictions of the model.
+
+The process begins with data preparation. The code operates under the assumption that there is a DataFrame named feature_importance_df, which consists of at least two columns: one representing the names of the features and another indicating their associated importance scores. The DataFrame is organized in descending order according to these importance scores, ensuring that the features deemed most impactful are positioned at the top.
+
+To create the bar plot, the code utilizes the sns.barplot() function from the Seaborn library. This function processes the data and provides a visual representation in which the length of each bar corresponds to the importance of its respective feature. In this layout, the x-axis denotes the importance scores, while the y-axis lists the feature names.
+
+The customization of the figure size is accomplished through the figsize parameter, which allows for a more spacious display, accommodating all features in a clear manner.
+
+The utilization of this code is driven by a number of compelling reasons. First, interpretability is crucial in machine learning, particularly with complex models. Understanding the features that hold the most sway can yield valuable insights into the data and elucidate the decision-making processes within the model.
+
+Additionally, identifying the most important features supports informed decision-making regarding feature selection. By recognizing which variables to retain or eliminate, one may simplify the model and enhance its overall performance.
+
+Lastly, visualizing feature importance facilitates communication. It becomes easier to convey results and insights to stakeholders or team members who may not possess deep technical knowledge.
+
+It appears that features related to the price gap relative to the moving average may serve as effective indicators.
+
+The information presented below is sourced from a specific online resource.
+
+It is important to evaluate the performance of our model by examining its predictions on the validation data. This assessment will help us determine the accuracy and reliability of the model in practical scenarios.
+
+Are the results satisfactory? It appears they are, which is encouraging.
+
+# https://colab.research.google.com/drive/1ECh69C0LDCUnuyvEmNFZ51l_276nkQqo#scrollTo=tTBUzPep2dm3
+def score(df, target_name=target, pred_name='prediction'):
+    '''Takes df and calculates spearm correlation from pre-defined cols'''
+    # method="first" breaks ties based on order in array
+    return np.corrcoef(
+        df[target_name],
+        df[pred_name].rank(pct=True, method="first")
+    )[0,1]
+def run_analytics(era_scores):
+    print(f"Mean Correlation: {era_scores.mean():.4f}")
+    print(f"Median Correlation: {era_scores.median():.4f}")
+    print(f"Standard Deviation: {era_scores.std():.4f}")
+    print('\n')
+    print(f"Mean Pseudo-Sharpe: {era_scores.mean()/era_scores.std():.4f}")
+    print(f"Median Pseudo-Sharpe: {era_scores.median()/era_scores.std():.4f}")
+    print('\n')
+    print(f'Hit Rate (% positive eras): {era_scores.apply(lambda x: np.sign(x)).value_counts()[1]/len(era_scores):.2%}')
+    era_scores.rolling(20).mean().plot(kind='line', title='Rolling Per Era Correlation Mean', figsize=(15,4))
+    plt.axhline(y=0.0, color="r", linestyle="--"); plt.show()
+    era_scores.cumsum().plot(title='Cumulative Sum of Era Scores', figsize=(15,4))
+    plt.axhline(y=0.0, color="r", linestyle="--"); plt.show()
+The score function is designed to calculate the Spearman correlation coefficient between two specified columns in a DataFrame, referred to as df: one representing the actual target values and the other representing the predicted values. This function assesses how effectively the predictions rank against the actual values by ranking the predicted values and subsequently determining the correlation.
+
+On the other hand, the run_analytics function processes a set of correlation scores that likely stem from various periods or models. This function provides summary statistics including mean, median, standard deviation, and pseudo-Sharpe ratios, all of which offer insights into the performance of the predictions. Moreover, it calculates the hit rate, which represents the percentage of successful prediction periods. In addition to these statistical assessments, run_analytics also produces visual representations of the rolling mean of the correlation scores and the cumulative sum of these scores.
+
+The mechanism employed for calculating correlation relies on ranked values, which effectively reduces the influence of outliers and highlights the order of values rather than their specific numerical magnitudes. The summary statistics obtained deliver important information regarding the consistency and reliability of predictions across different timeframes, while the rolling mean smooths out any fluctuations, allowing for easier identification of trends over time.
+
+The primary intention of this code is to facilitate financial modeling or analytics, where it is crucial to evaluate the relationship between predictions, such as asset returns, and actual outcomes. By gaining insights from the correlation and accompanying performance metrics, practitioners can assess the effectiveness of their predictive models or strategies. Furthermore, the visual components of the analysis contribute to the rapid identification of trends or changes in performance, supporting data-driven decision-making.
+
+# prediction for the validation set
+valid_sub = val_df[drops].copy()
+valid_sub['prediction'] = model.predict(val_set['X'])
+# compute score
+val_era_scores = valid_sub.copy()
+val_era_scores['friday_date'] = val_era_scores['friday_date'].astype(str)
+val_era_scores = val_era_scores.loc[val_era_scores['prediction'].isna() == False].groupby(['friday_date']).apply(score)
+run_analytics(val_era_scores)
+
+
+
+This code serves the purpose of making predictions on a validation dataset using a pre-trained model and subsequently computing scores based on those predictions. It encompasses two primary functions: generating predictions and evaluating the models performance on the validation data.
+
+The process begins with the creation of a copy of a DataFrame, referred to as valid_sub, which includes columns specified in drops from the val_df DataFrame. A new column titled prediction is then added to this DataFrame, which captures the output produced by the model when applied to a specific dataset, identified as val_set[X].
+
+Upon generating the predictions, the code proceeds to create another copy of the valid_sub DataFrame for the purpose of scoring. It ensures that the friday_date column, presumably containing date information, is formatted as a string. The code further filters out any rows in which the prediction is absent, such as those containing not-a-number or NaN values. The remaining dataset is then grouped by friday_date, and a scoring function named score is applied to each group. This function is likely designed to compute a performance metric based on the predictions corresponding to each date.
+
+In conclusion, the code executes a function called run_analytics, which takes the processed scores as input for further analysis. This analysis may involve various aspects such as visualization, reporting, or the calculation of additional metrics.
+
+It appears that this serves as a suitable introduction, does it not?
+
+We will utilize this trained model to prepare a submission for Numerai Signals. It is important to note that the data obtained from yfinance is incomplete, as there are instances where recent data is not available for several tickers.
+
+For a successful submission, we require a minimum of five tickers. Therefore, we should first verify whether we possess at least five tickers for which the most recent date, classified as a Friday, aligns with the actual most recent Friday date.
+
+# do we have at least 5 tickers, whose the latest date matches the recent friday?
+ticker_date_df = feature_df.groupby('ticker')['friday_date'].max().reset_index()
+if len(ticker_date_df.loc[ticker_date_df['friday_date'] == recent_friday]) >= 5:
+    ticker_date_df = ticker_date_df.loc[ticker_date_df['friday_date'] == recent_friday]
+else: # use dates later than the second last friday
+    ticker_date_df = ticker_date_df.loc[ticker_date_df['friday_date'] == recent_friday2]
+    recent_friday = recent_friday2
+    
+print(len(ticker_date_df))
+ticker_date_df
+
+This code is intended to analyze ticker data to ascertain whether there are at least five distinct tickers associated with a date that corresponds to the most recent Friday.
+
+The code functions by first grouping the data within feature_df by ticker and identifying the maximum (or latest) Friday date for each ticker. This process results in a consolidated data frame that displays each ticker along with its most recent Friday date.
+
+Subsequently, the code verifies if there are a minimum of five tickers with their latest recorded date aligned with the most recent Friday. If the number of qualifying tickers meets this threshold, the code proceeds to filter ticker_date_df to retain only those tickers alongside their corresponding dates. Conversely, if there are fewer than five qualifying tickers, the code defaults to utilizing the date from the second most recent Friday.
+
+Ultimately, the code outputs the count of tickers that align with the selected Friday date and presumably returns the filtered data frame, ticker_date_df.
+
+That is satisfactory. We will proceed to conduct the inference solely on the specified tickers and then submit the results.
+
+# live sub
+feature_df.loc[feature_df['friday_date'] == recent_friday, 'data_type'] = 'live'
+test_sub = feature_df.query('data_type == "live"')[drops].copy()
+test_sub['prediction'] = model.predict(feature_df.query('data_type == "live"')[features])
+logger.info(test_sub.shape)
+test_sub.head()
+
+This code pertains to a workflow designed for data processing and model prediction, specifically targeting information related to a live event that takes place on Fridays.
+
+Initially, the code updates a DataFrame named feature_df by designating entries that correspond to the most recent Friday with a new value in the data_type column. This alteration indicates that these entries are classified as live, which serves to differentiate real-time data from historical records.
+
+Subsequently, a new DataFrame, referred to as test_sub, is created by filtering feature_df to include only those rows where the data_type is labeled live. Additionally, it selects specific columns as defined in the variable drops, which presumably contains names of columns to be omitted from further analysis. This process results in a clean set of relevant data, which is essential for the models predictions.
+
+Following the data preparation, the code employs a machine learning model, named model, to generate predictions based on the live data features. It retrieves the pertinent features from feature_df, as identified in the variable features, and applies the model to derive outcomes. These predictions are then recorded in a new column labeled prediction within test_sub.
+
+The size, or shape, of the test_sub DataFrame is logged, presumably for debugging or tracking reasons. Logging the dimensions of datasets during processing is a common practice to ensure that the filtering and prediction phases are executed correctly.
+
+Finally, the code exhibits the initial rows of the test_sub DataFrame for a brief inspection of the results, including the predicted values.
+
+# To submit, you need to have Numerai account and have API's id and secret key. Also you need to have at least one (numerai signals') model slot.
+# public_id = '<Your Numerai API ID>'
+# secret_key = '<Your Numerai Secret Key>'
+# slot_name = '<Your Numerai Signals Submission Slot Name>'
+# The following is mine. You cannot use them so replace them with yours:D
+from kaggle_secrets import UserSecretsClient
+user_secrets = UserSecretsClient()
+public_id = user_secrets.get_secret("public_id")
+secret_key = user_secrets.get_secret("secret_key")
+This code snippet is designed to establish the necessary credentials for submitting model predictions to the Numerai platform, a data science competition centered on developing financial models. It specifically retrieves the users API ID and secret key from a secure storage method provided by Kaggle.
+
+The code begins with secure key retrieval. It employs the UserSecretsClient from the kaggle_secrets module, which facilitates access to secret API credentials that are stored securely. This approach eliminates the need to hardcode sensitive information directly within the code, adhering to security best practices.
+
+It subsequently retrieves two essential components: the public_id, which serves as the users unique API identifier for Numerai, and the secret_key, required for authentication when submitting data to the Numerai platform.
+
+slot_name = 'KATSU1110_EDELGARD'
+def submit_signal(sub: pd.DataFrame, public_id: str, secret_key: str, slot_name: str):
+    """
+    submit numerai signals prediction
+    """
+    # setup private API
+    napi = numerapi.SignalsAPI(public_id, secret_key)
+    model_id = napi.get_models()[f'{slot_name.lower()}']
+    
+    # submit to get diagnostics
+    filename = f"example_sub_val{model_id}.csv"
+    sub.query('data_type == "validation"').to_csv(filename, index=False)
+    napi.upload_diagnostics(filename, model_id=model_id)
+    print('Validation prediction uploaded for diagnostics!')
+    
+    # submit
+    filename = f"example_sub{model_id}.csv"
+    sub.to_csv(filename, index=False)
+    try:
+        napi.upload_predictions(filename, model_id=model_id)
+        print(f'Submitted : {slot_name}!')
+    except Exception as e:
+        print(f'Submission failure: {e}')
+    
+# concat valid and test 
+sub = pd.concat([valid_sub, test_sub], ignore_index=True)
+# rename to 'signal'
+sub.rename(columns={'prediction': 'signal'}, inplace=True)
+# select necessary columns
+sub = sub[['ticker', 'friday_date', 'data_type', 'signal']]
+# submit
+submit_signal(sub, public_id, secret_key, slot_name)
+
+The function begins by establishing a connection to the Numerai Signals API using the provided credentials, specifically the public ID and secret key. Subsequently, it retrieves the model ID linked to a particular slot name, which is crucial for ensuring that predictions are submitted to the correct model on the Numerai platform.
+
+In the next step, the function prepares validation data by selecting it from the designated DataFrame, saving this information to a CSV file, and subsequently uploading it for diagnostic purposes to assess its quality and performance. Following this, the function proceeds to save the entire DataFrame containing predictions — after clearly renaming the necessary columns — to another CSV file. This file is then uploaded as the actual submission, and should any issues arise during this process, the function captures and reports the error accordingly.
+
+Prior to invoking the submission function, the code consolidates separate DataFrames for both validation and test submissions. This approach ensures that the data structure remains consistent for the upload process.
+
+The implementation makes use of the Pandas library for data manipulation tasks, including the concatenation of DataFrames and renaming of columns. Furthermore, it employs the Numerai API through the numerapi library, facilitating the connection and submission of data. To enhance reliability, the code includes error handling mechanisms during the submission process, allowing for effective communication of any potential problems.
+
+Weekly submissions are accepted only from 18:00 on Saturday to 14:30 on Monday (UTC). However, you may upload your validation predictions at any time to review the diagnostics on the Numerai website.
+
+To access your validation scores, simply click on More and then select Diagnostics within your model slot. There, you will find a visually informative representation of your validation scores. The following image exemplifies such findings, which appear quite promising.
+
+print(sub.shape)
+sub.head()
+
+The code you have shared is commonly utilized in tasks related to data analysis and manipulation, especially when employing data structures in libraries such as pandas in Python.
+
+The command print(sub.shape) provides the dimensions of a data structure named sub, which is likely a DataFrame or an array. The shape denotes the number of rows and columns present in sub. Understanding these dimensions is vital for grasping the size of your dataset, as it assists in determining whether it contains the anticipated amount of information.
+
+The subsequent command, sub.head(), retrieves and shows the initial rows of the DataFrame or array sub; by default, this typically displays the first five rows. This function is advantageous for quickly examining the data in order to comprehend its structure, the nature of the values contained, and to conduct preliminary evaluations regarding data integrity and formatting
